@@ -1,7 +1,6 @@
-use crossterm::event::KeyCode;
-use crossterm::event::KeyModifiers;
 use std::fmt::Display;
 
+use crate::events::*;
 use crate::input::*;
 use crate::screen::*;
 
@@ -28,23 +27,32 @@ impl Editor {
         self.screen.open()?;
 
         loop {
-            let result = self.input.read();
-            match result {
-                Ok(event) => match event {
-                    EventType::Key(key) => {
-                        // println!("{:?}\r", key);
-                        if key.code == KeyCode::Char('q')
-                            && key.modifiers.contains(KeyModifiers::CONTROL)
-                        {
-                            break;
-                        }
-                    }
-                },
-                Err(e) => {
-                    self.die("Failed to read event", e);
-                }
+            self.screen.refresh()?;
+            let pos = self.screen.position();
+            self.screen.move_to(pos)?;
+            self.screen.flush()?;
+
+            if self.event()? {
+                break;
             }
         }
         self.screen.release()
+    }
+
+    pub fn event(&mut self) -> crossterm::Result<bool> {
+        let result = self.input.read();
+        match result {
+            Ok(event) => match event {
+                KiloEvent::Key(_key) => {
+                    // println!("{:?}\r", key);
+                }
+                KiloEvent::Cursor(direction) => self.screen.move_cursor(direction),
+                KiloEvent::Editor(_) => return Ok(true),
+            },
+            Err(e) => {
+                self.die("Failed to read event", e);
+            }
+        }
+        Ok(false)
     }
 }
