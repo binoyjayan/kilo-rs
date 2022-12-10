@@ -1,5 +1,4 @@
 use crate::editor::*;
-use std::path::Path;
 
 mod cursor;
 mod data;
@@ -14,8 +13,7 @@ fn main() -> crossterm::Result<()> {
     let mut editor = if args.len() < 2 {
         Editor::new()
     } else {
-        let file_path = Path::new(&args[1]);
-        Editor::open(file_path)
+        Editor::open(&args[1])
     }?;
 
     editor.run()

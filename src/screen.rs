@@ -1,9 +1,12 @@
 use crossterm::cursor;
-use crossterm::style::Print;
+use crossterm::style;
 use crossterm::terminal;
 use crossterm::QueueableCommand;
+
 use std::io;
 use std::io::Write;
+use std::time;
+use std::time::Duration;
 
 use crate::cursor::*;
 use crate::data::*;
@@ -17,29 +20,30 @@ pub struct Screen {
     editrows: Vec<EditRow>,
     rowoff: usize,
     coloff: usize,
+    file: Option<String>,
+    status_msg: String,
+    status_time: time::Instant,
 }
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 impl Screen {
-    pub fn new(lines: &[String]) -> crossterm::Result<Self> {
-        let (columns, rows) = crossterm::terminal::size()?;
+    pub fn new(lines: &[String], file: Option<String>) -> crossterm::Result<Self> {
+        let (width, height) = crossterm::terminal::size()?;
         Ok(Self {
             stdout: io::stdout(),
-            window: Window::new(columns, rows),
+            // One row on the bottom for status bar
+            window: Window::new(width, height - 2),
             cursor: Position::new(0, 0),
-            editrows: if lines.is_empty() {
-                Vec::new()
-            } else {
-                let v = Vec::from(lines);
-                let mut rows = Vec::new();
-                for row in v {
-                    rows.push(EditRow::new(row))
-                }
-                rows
-            },
+            editrows: lines
+                .iter()
+                .map(|line| EditRow::new(line.to_string()))
+                .collect(),
             rowoff: 0,
             coloff: 0,
+            file,
+            status_msg: String::from("Ctrl-Q = quit"),
+            status_time: time::Instant::now(),
         })
     }
 
@@ -58,6 +62,8 @@ impl Screen {
         self.scroll();
         self.clear()?;
         self.draw_rows()?;
+        self.draw_status()?;
+        self.draw_message()?;
         Ok(())
     }
 
@@ -78,7 +84,7 @@ impl Screen {
                 } else {
                     self.stdout
                         .queue(cursor::MoveTo(0, y))?
-                        .queue(Print("~".to_string()))?;
+                        .queue(style::Print("~".to_string()))?;
                 }
             } else {
                 let colstart = self.coloff;
@@ -94,12 +100,76 @@ impl Screen {
                     continue;
                 }
                 let colend = colstart + len;
-                self.stdout.queue(cursor::MoveTo(0, y))?.queue(Print(
-                    self.editrows[filerow].render[colstart..colend].to_string(),
-                ))?;
+                self.stdout
+                    .queue(cursor::MoveTo(0, y))?
+                    .queue(style::Print(
+                        self.editrows[filerow].render[colstart..colend].to_string(),
+                    ))?;
             }
         }
         Ok(())
+    }
+
+    pub fn draw_status(&mut self) -> crossterm::Result<()> {
+        let width = self.window.width as usize;
+
+        let mut status_left = if let Some(filename) = &self.file {
+            format!("{} [{} lines]", filename, self.editrows.len())
+        } else {
+            "[No Name]".to_string()
+        };
+        status_left.truncate(width);
+
+        let msg_right = format!("{}/{}", self.cursor.y + 1, self.editrows.len());
+
+        let mut status_right = String::new();
+        if status_left.len() < self.window.width as usize - msg_right.len() {
+            let mut len = status_left.len();
+            while len < width {
+                if width - len == msg_right.len() {
+                    status_right.push_str(&msg_right);
+                    break;
+                } else {
+                    status_right.push(' ');
+                    len += 1;
+                }
+            }
+        }
+        let status_msg = format!("{}{}", status_left, status_right);
+
+        let color_status = style::Colors::new(style::Color::Black, style::Color::White);
+        self.stdout
+            .queue(cursor::MoveTo(0, self.window.height))?
+            .queue(style::SetColors(color_status))?
+            .queue(style::Print(status_msg))?;
+
+        self.stdout.queue(style::ResetColor)?;
+
+        Ok(())
+    }
+
+    pub fn draw_message(&mut self) -> crossterm::Result<()> {
+        if self.status_time.elapsed() > Duration::from_secs(5) {
+            self.status_msg.clear();
+            return Ok(());
+        }
+        let color_status = style::Colors::new(style::Color::Black, style::Color::White);
+        let status_help: String = self
+            .status_msg
+            .chars()
+            .take(self.window.width as usize)
+            .collect();
+        self.stdout
+            .queue(style::SetColors(color_status))?
+            .queue(cursor::MoveTo(0, self.window.height + 1))?
+            .queue(style::Print(status_help))?;
+        self.stdout.queue(style::ResetColor)?;
+        Ok(())
+    }
+
+    pub fn _set_status(&mut self, message: &str) {
+        self.status_time = time::Instant::now();
+        self.status_msg = message.to_string();
     }
 
     pub fn show_welcome(&mut self, row: u16) -> crossterm::Result<()> {
@@ -109,13 +179,13 @@ impl Screen {
             let left = ((self.window.width as usize - welcome.len()) / 2) as u16;
             self.stdout
                 .queue(cursor::MoveTo(0, row))?
-                .queue(Print("~".to_string()))?
+                .queue(style::Print("~".to_string()))?
                 .queue(cursor::MoveTo(left, row))?
-                .queue(Print(welcome))?;
+                .queue(style::Print(welcome))?;
         } else {
             self.stdout
                 .queue(cursor::MoveTo(0, row))?
-                .queue(Print(welcome))?;
+                .queue(style::Print(welcome))?;
         }
         Ok(())
     }
@@ -128,10 +198,10 @@ impl Screen {
         self.cursor.clone()
     }
 
-    // pub fn read_pos() -> crossterm::Result<Position> {
-    //     let (x, y) = crossterm::cursor::position()?;
-    //     Ok(Position::new(x, y))
-    // }
+    pub fn _read_pos() -> crossterm::Result<Position> {
+        let (x, y) = crossterm::cursor::position()?;
+        Ok(Position::new(x, y))
+    }
 
     /*
      * pos.y does not refer to the position of the cursor on the screen.

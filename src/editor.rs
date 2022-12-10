@@ -1,6 +1,5 @@
 use std::fmt::Display;
 use std::fs;
-use std::path::Path;
 
 use crate::events::*;
 use crate::input::*;
@@ -13,29 +12,29 @@ pub struct Editor {
 
 impl Editor {
     pub fn new() -> crossterm::Result<Self> {
-        Self::create(&[])
+        Self::create(&[], None)
     }
 
-    pub fn open(file: &Path) -> crossterm::Result<Self> {
+    pub fn open(file: &str) -> crossterm::Result<Self> {
         let data = Self::read_file(file);
         let lines: Vec<String> = data.split('\n').map(|s: &str| s.to_string()).collect();
-        Self::create(&lines)
+        Self::create(&lines, Some(file.to_string()))
     }
 
-    fn read_file(file: &Path) -> String {
+    fn read_file(file: &str) -> String {
         match fs::read_to_string(file) {
             Ok(data) => data,
             Err(e) => {
-                eprintln!("{}: {}", file.to_string_lossy(), e);
+                eprintln!("{}: {}", file, e);
                 std::process::exit(1);
             }
         }
     }
 
-    pub fn create(lines: &[String]) -> crossterm::Result<Self> {
+    pub fn create(lines: &[String], file: Option<String>) -> crossterm::Result<Self> {
         Ok(Self {
             input: Input::new(),
-            screen: Screen::new(lines)?,
+            screen: Screen::new(lines, file)?,
         })
     }
 
