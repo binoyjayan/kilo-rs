@@ -62,13 +62,17 @@ impl Editor {
 
     pub fn event(&mut self) -> crossterm::Result<bool> {
         let result = self.input.read();
+
         match result {
             Ok(event) => match event {
-                KiloEvent::Key(_key) => {
-                    // println!("{:?}\r", key);
+                EditorEvent::Key(ch) => {
+                    self.screen.insert_char(ch);
                 }
-                KiloEvent::Cursor(direction) => self.screen.move_cursor(direction),
-                KiloEvent::Editor(_) => return Ok(true),
+                EditorEvent::Cursor(direction) => self.screen.move_cursor(direction),
+                EditorEvent::Control(ctrl) => match ctrl {
+                    ControlEvent::Quit => return Ok(true),
+                    ControlEvent::CtrlH => {}
+                },
             },
             Err(e) => {
                 self.die("Failed to read event", e);

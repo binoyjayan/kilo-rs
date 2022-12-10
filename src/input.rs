@@ -13,34 +13,53 @@ impl Input {
         Self {}
     }
 
-    pub fn key_event(&self, key: KeyEvent) -> crossterm::Result<KiloEvent> {
+    // Decode key, return None if it can be ignored
+    pub fn key_event(&self, key: KeyEvent) -> Option<EditorEvent> {
         match key {
+            // Control keys
             KeyEvent {
-                code: KeyCode::Char('q'),
+                code: KeyCode::Char(ch),
                 modifiers: KeyModifiers::CONTROL,
                 ..
-            } => Ok(KiloEvent::Editor(EditorEvent::Quit)),
-            KeyEvent { code, .. } => match code {
-                KeyCode::Up => Ok(KiloEvent::Cursor(EditorKey::Up)),
-                KeyCode::Left => Ok(KiloEvent::Cursor(EditorKey::Left)),
-                KeyCode::Down => Ok(KiloEvent::Cursor(EditorKey::Down)),
-                KeyCode::Right => Ok(KiloEvent::Cursor(EditorKey::Right)),
-                KeyCode::PageUp => Ok(KiloEvent::Cursor(EditorKey::PageUp)),
-                KeyCode::PageDown => Ok(KiloEvent::Cursor(EditorKey::PageDown)),
-                KeyCode::Home => Ok(KiloEvent::Cursor(EditorKey::Home)),
-                KeyCode::End => Ok(KiloEvent::Cursor(EditorKey::End)),
-                KeyCode::Delete => Ok(KiloEvent::Cursor(EditorKey::Delete)),
-                KeyCode::Backspace => Ok(KiloEvent::Cursor(EditorKey::Backspace)),
-                _ => Ok(KiloEvent::Key(key)),
+            } => match ch {
+                'q' => Some(EditorEvent::Control(ControlEvent::Quit)),
+                'h' => Some(EditorEvent::Control(ControlEvent::CtrlH)),
+                _ => None,
             },
+            // Cursor and character keys
+            KeyEvent {
+                code,
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => match code {
+                KeyCode::Up => Some(EditorEvent::Cursor(CursorKey::Up)),
+                KeyCode::Left => Some(EditorEvent::Cursor(CursorKey::Left)),
+                KeyCode::Down => Some(EditorEvent::Cursor(CursorKey::Down)),
+                KeyCode::Right => Some(EditorEvent::Cursor(CursorKey::Right)),
+                KeyCode::PageUp => Some(EditorEvent::Cursor(CursorKey::PageUp)),
+                KeyCode::PageDown => Some(EditorEvent::Cursor(CursorKey::PageDown)),
+                KeyCode::Home => Some(EditorEvent::Cursor(CursorKey::Home)),
+                KeyCode::End => Some(EditorEvent::Cursor(CursorKey::End)),
+                KeyCode::Delete => Some(EditorEvent::Cursor(CursorKey::Delete)),
+                KeyCode::Backspace => Some(EditorEvent::Cursor(CursorKey::Backspace)),
+                KeyCode::Enter => Some(EditorEvent::Cursor(CursorKey::Enter)),
+                KeyCode::Tab => Some(EditorEvent::Cursor(CursorKey::Tab)),
+                KeyCode::Char(ch) => Some(EditorEvent::Key(ch)),
+                _ => None,
+            },
+            KeyEvent { .. } => None,
         }
     }
 
-    pub fn read(&self) -> crossterm::Result<KiloEvent> {
+    pub fn read(&self) -> crossterm::Result<EditorEvent> {
         loop {
             match event::read() {
                 Ok(event) => match event {
-                    Event::Key(key) => return self.key_event(key),
+                    Event::Key(key) => {
+                        if let Some(key) = self.key_event(key) {
+                            return Ok(key);
+                        }
+                    }
                     _ => {
                         println!("other event\r");
                     }

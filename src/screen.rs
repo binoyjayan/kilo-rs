@@ -35,16 +35,29 @@ impl Screen {
             // One row on the bottom for status bar
             window: Window::new(width, height - 2),
             cursor: Position::new(0, 0),
-            editrows: lines
-                .iter()
-                .map(|line| EditRow::new(line.to_string()))
-                .collect(),
+            editrows: Self::make_editrows(lines),
             rowoff: 0,
             coloff: 0,
             file,
             status_msg: String::from("Ctrl-Q = quit"),
             status_time: time::Instant::now(),
         })
+    }
+
+    pub fn make_editrows(lines: &[String]) -> Vec<EditRow> {
+        let mut editrows = lines
+            .iter()
+            .map(|line| EditRow::new(line.to_string()))
+            .collect::<Vec<EditRow>>();
+
+        // Remove last line if it is empty
+        if !editrows.is_empty() {
+            let last = editrows.iter().last().unwrap();
+            if last.chars.is_empty() {
+                editrows.pop();
+            }
+        }
+        editrows
     }
 
     pub fn open(&mut self) -> crossterm::Result<()> {
@@ -217,9 +230,9 @@ impl Screen {
         Ok(())
     }
 
-    pub fn move_cursor(&mut self, key: EditorKey) {
+    pub fn move_cursor(&mut self, key: CursorKey) {
         match key {
-            EditorKey::Left => {
+            CursorKey::Left => {
                 if self.cursor.x != 0 {
                     self.cursor.x -= 1;
                 } else if self.cursor.y > 0 {
@@ -228,7 +241,7 @@ impl Screen {
                     self.cursor.x = self.editrows[self.cursor.y as usize].chars.len() as u16;
                 }
             }
-            EditorKey::Right => {
+            CursorKey::Right => {
                 /* Find editrow index based on if data is available at the row.
                  * Check if data is available at the editrow
                  */
@@ -244,40 +257,40 @@ impl Screen {
                     }
                 }
             }
-            EditorKey::Up => {
+            CursorKey::Up => {
                 self.cursor.y = self.cursor.y.saturating_sub(1);
             }
-            EditorKey::Down => {
+            CursorKey::Down => {
                 // allow the cursor to advance past the bottom of the screen, but
                 // not past the bottom of the file.
                 if (self.cursor.y as usize) < self.editrows.len() {
                     self.cursor.y += 1
                 }
             }
-            EditorKey::PageUp | EditorKey::PageDown => {
-                let direction = if key == EditorKey::PageUp {
+            CursorKey::PageUp | CursorKey::PageDown => {
+                let direction = if key == CursorKey::PageUp {
                     self.cursor.y = self.rowoff as u16;
-                    EditorKey::Up
+                    CursorKey::Up
                 } else {
                     let screenrows = self.window.height as usize;
                     self.cursor.y = (self.rowoff + screenrows - 1).min(self.editrows.len()) as u16;
-                    EditorKey::Down
+                    CursorKey::Down
                 };
                 let times = self.window.height as usize;
                 for _ in 0..times {
                     self.move_cursor(direction);
                 }
             }
-            EditorKey::Home => {
+            CursorKey::Home => {
                 self.cursor.x = 0;
             }
-            EditorKey::End => {
+            CursorKey::End => {
                 let cy = self.cursor.y as usize;
                 if cy < self.editrows.len() {
                     self.cursor.x = self.editrows[cy].chars.len() as u16;
                 }
             }
-            EditorKey::Delete | EditorKey::Backspace => {}
+            CursorKey::Delete | CursorKey::Backspace | CursorKey::Enter | CursorKey::Tab => {}
         }
         // Find the number of characters on the editrow
         let rowlen = if self.cursor.y as usize >= self.editrows.len() {
@@ -319,6 +332,16 @@ impl Screen {
         if (self.cursor.rx as usize) >= (self.coloff + self.window.width as usize) {
             self.coloff = self.cursor.rx as usize - self.window.width as usize
         }
+    }
+
+    pub fn insert_char(&mut self, ch: char) {
+        if (self.cursor.y as usize) == self.editrows.len() {
+            self.editrows.push(EditRow::new(String::new()));
+        }
+        let cy = self.cursor.y as usize;
+        let cx = self.cursor.x as usize;
+        self.editrows[cy].insert_char(cx, ch);
+        self.cursor.x += 1;
     }
 
     pub fn release(&mut self) -> crossterm::Result<()> {

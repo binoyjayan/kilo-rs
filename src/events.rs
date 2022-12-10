@@ -1,7 +1,5 @@
-use crossterm::event::KeyEvent;
-
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub enum EditorKey {
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum CursorKey {
     Left,
     Right,
     Up,
@@ -12,15 +10,19 @@ pub enum EditorKey {
     End,
     Delete,
     Backspace,
+    Enter,
+    Tab,
 }
 
-#[derive(Copy, Clone)]
-pub enum EditorEvent {
+#[derive(Debug, Copy, Clone)]
+pub enum ControlEvent {
     Quit,
+    CtrlH,
 }
 
-pub enum KiloEvent {
-    Key(KeyEvent),
-    Editor(EditorEvent),
-    Cursor(EditorKey),
+#[derive(Debug)]
+pub enum EditorEvent {
+    Key(char),
+    Control(ControlEvent),
+    Cursor(CursorKey),
 }

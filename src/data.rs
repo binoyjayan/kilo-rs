@@ -51,4 +51,9 @@ impl EditRow {
         }
         rx as u16
     }
+
+    pub fn insert_char(&mut self, idx: usize, ch: char) {
+        self.chars.insert(idx, ch);
+        self.render = Self::render_chars(&self.chars);
+    }
 }
