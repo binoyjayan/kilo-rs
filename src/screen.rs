@@ -21,11 +21,14 @@ pub struct Screen {
     rowoff: usize,
     coloff: usize,
     file: Option<String>,
+    dirty: bool,
+    quit_times: u8,
     status_msg: String,
     status_time: time::Instant,
 }
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+const QUIT_TIMES: u8 = 3;
 
 impl Screen {
     pub fn new(lines: &[String], file: Option<String>) -> crossterm::Result<Self> {
@@ -39,7 +42,9 @@ impl Screen {
             rowoff: 0,
             coloff: 0,
             file,
-            status_msg: String::from("Ctrl-Q = quit"),
+            dirty: false,
+            quit_times: QUIT_TIMES,
+            status_msg: String::from("Ctrl-Q: quit, Ctrl-S: save"),
             status_time: time::Instant::now(),
         })
     }
@@ -127,7 +132,11 @@ impl Screen {
         let width = self.window.width as usize;
 
         let mut status_left = if let Some(filename) = &self.file {
-            format!("{} [{} lines]", filename, self.editrows.len())
+            if self.dirty {
+                format!("{} [{} lines, modified ]", filename, self.editrows.len())
+            } else {
+                format!("{} [{} lines]", filename, self.editrows.len())
+            }
         } else {
             "[No Name]".to_string()
         };
@@ -166,12 +175,18 @@ impl Screen {
             self.status_msg.clear();
             return Ok(());
         }
+
         let color_status = style::Colors::new(style::Color::Black, style::Color::White);
         let status_help: String = self
             .status_msg
             .chars()
             .take(self.window.width as usize)
             .collect();
+
+        // Pad the rest of the screen with with spaces
+        let rem_len = status_help.len().max(self.window.width as usize) - (status_help.len());
+        let status_help = status_help + &" ".repeat(rem_len);
+
         self.stdout
             .queue(style::SetColors(color_status))?
             .queue(cursor::MoveTo(0, self.window.height + 1))?
@@ -180,7 +195,7 @@ impl Screen {
         Ok(())
     }
 
-    pub fn _set_status(&mut self, message: &str) {
+    pub fn set_status(&mut self, message: &str) {
         self.status_time = time::Instant::now();
         self.status_msg = message.to_string();
     }
@@ -342,6 +357,35 @@ impl Screen {
         let cx = self.cursor.x as usize;
         self.editrows[cy].insert_char(cx, ch);
         self.cursor.x += 1;
+        self.set_dirty(true);
+    }
+
+    pub fn is_dirty(&mut self) -> bool {
+        self.dirty
+    }
+
+    pub fn set_dirty(&mut self, dirty: bool) {
+        self.dirty = dirty;
+    }
+
+    pub fn get_quit_times(&mut self) -> u8 {
+        self.quit_times
+    }
+
+    pub fn dec_quit_times(&mut self) {
+        self.quit_times -= 1;
+    }
+
+    pub fn reset_quit_times(&mut self) {
+        self.quit_times = QUIT_TIMES;
+    }
+
+    pub fn rows_to_string(&self) -> String {
+        self.editrows
+            .iter()
+            .map(|x| x.chars.clone())
+            .collect::<Vec<String>>()
+            .join("\n")
     }
 
     pub fn release(&mut self) -> crossterm::Result<()> {

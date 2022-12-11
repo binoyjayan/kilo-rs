@@ -24,6 +24,7 @@ impl Input {
             } => match ch {
                 'q' => Some(EditorEvent::Control(ControlEvent::Quit)),
                 'h' => Some(EditorEvent::Control(ControlEvent::CtrlH)),
+                's' => Some(EditorEvent::Control(ControlEvent::Save)),
                 _ => None,
             },
             // Cursor and character keys

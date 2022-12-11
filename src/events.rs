@@ -18,6 +18,7 @@ pub enum CursorKey {
 pub enum ControlEvent {
     Quit,
     CtrlH,
+    Save,
 }
 
 #[derive(Debug)]

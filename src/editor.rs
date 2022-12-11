@@ -8,6 +8,7 @@ use crate::screen::*;
 pub struct Editor {
     input: Input,
     screen: Screen,
+    file: Option<String>,
 }
 
 impl Editor {
@@ -34,7 +35,8 @@ impl Editor {
     pub fn create(lines: &[String], file: Option<String>) -> crossterm::Result<Self> {
         Ok(Self {
             input: Input::new(),
-            screen: Screen::new(lines, file)?,
+            screen: Screen::new(lines, file.clone())?,
+            file,
         })
     }
 
@@ -70,7 +72,18 @@ impl Editor {
                 }
                 EditorEvent::Cursor(direction) => self.screen.move_cursor(direction),
                 EditorEvent::Control(ctrl) => match ctrl {
-                    ControlEvent::Quit => return Ok(true),
+                    ControlEvent::Quit => {
+                        let quit_times = self.screen.get_quit_times();
+                        if self.screen.is_dirty() && quit_times > 0 {
+                            let msg = format!("WARNING: File has unsaved changes. Press Ctrl-Q {} more time(s) to quit", quit_times);
+                            self.screen.set_status(&msg);
+                            self.screen.dec_quit_times();
+                            return Ok(false);
+                        } else {
+                            return Ok(true);
+                        }
+                    }
+                    ControlEvent::Save => self.save(),
                     ControlEvent::CtrlH => {}
                 },
             },
@@ -78,6 +91,22 @@ impl Editor {
                 self.die("Failed to read event", e);
             }
         }
+        self.screen.reset_quit_times();
         Ok(false)
+    }
+
+    pub fn save(&mut self) {
+        if let Some(filename) = &self.file {
+            let buf = self.screen.rows_to_string();
+            let msg = match fs::write(filename, &buf) {
+                Ok(_) => {
+                    let file_len = buf.as_bytes().len();
+                    self.screen.set_dirty(false);
+                    format!("{} bytes written to {}", file_len, filename)
+                }
+                Err(e) => format!("Failed to write to {} - {}", filename, e),
+            };
+            self.screen.set_status(&msg);
+        }
     }
 }
