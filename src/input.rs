@@ -30,7 +30,7 @@ impl Input {
             // Cursor and character keys
             KeyEvent {
                 code,
-                modifiers: KeyModifiers::NONE,
+                modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
                 ..
             } => match code {
                 KeyCode::Up => Some(EditorEvent::Cursor(CursorKey::Up)),

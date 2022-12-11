@@ -55,7 +55,7 @@ impl Screen {
             .map(|line| EditRow::new(line.to_string()))
             .collect::<Vec<EditRow>>();
 
-        // Remove last line if it is empty
+        // TODO: Remove last line if it is empty?
         if !editrows.is_empty() {
             let last = editrows.iter().last().unwrap();
             if last.chars.is_empty() {
@@ -305,7 +305,12 @@ impl Screen {
                     self.cursor.x = self.editrows[cy].chars.len() as u16;
                 }
             }
-            CursorKey::Delete | CursorKey::Backspace | CursorKey::Enter | CursorKey::Tab => {}
+            CursorKey::Delete => {
+                self.move_cursor(CursorKey::Right);
+                self.del_char();
+            }
+            CursorKey::Backspace => self.del_char(),
+            CursorKey::Enter | CursorKey::Tab => {}
         }
         // Find the number of characters on the editrow
         let rowlen = if self.cursor.y as usize >= self.editrows.len() {
@@ -360,6 +365,35 @@ impl Screen {
         self.set_dirty(true);
     }
 
+    // Delete character left of the cursor
+    pub fn del_char(&mut self) {
+        let cy = self.cursor.y as usize;
+        let cx = self.cursor.x as usize;
+
+        if cx == 0 && cy == 0 || cy >= self.editrows.len() {
+            return;
+        }
+        let s = self.editrows[cy].chars.clone();
+        if cx > 0 {
+            self.editrows[cy].del_char(cx - 1);
+            self.cursor.x = (cx - 1) as u16;
+        } else {
+            self.cursor.x = self.editrows[cy - 1].chars.len() as u16;
+            self.editrows[cy - 1].append_str(&s);
+            self.del_row(cy);
+            self.cursor.y -= 1;
+        }
+        self.set_dirty(true);
+    }
+
+    pub fn del_row(&mut self, at: usize) {
+        if at >= self.editrows.len() {
+            return;
+        }
+        self.editrows.remove(at);
+        self.set_dirty(true);
+    }
+
     pub fn is_dirty(&mut self) -> bool {
         self.dirty
     }
@@ -368,12 +402,9 @@ impl Screen {
         self.dirty = dirty;
     }
 
-    pub fn get_quit_times(&mut self) -> u8 {
-        self.quit_times
-    }
-
-    pub fn dec_quit_times(&mut self) {
+    pub fn dec_quit_times(&mut self) -> u8 {
         self.quit_times -= 1;
+        self.quit_times
     }
 
     pub fn reset_quit_times(&mut self) {

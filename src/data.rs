@@ -56,4 +56,17 @@ impl EditRow {
         self.chars.insert(idx, ch);
         self.render = Self::render_chars(&self.chars);
     }
+
+    pub fn append_str(&mut self, s: &str) {
+        self.chars.push_str(s);
+        self.render = Self::render_chars(&self.chars);
+    }
+
+    pub fn del_char(&mut self, idx: usize) {
+        if idx >= self.chars.len() {
+            return;
+        }
+        self.chars.remove(idx).to_string();
+        self.render = Self::render_chars(&self.chars);
+    }
 }

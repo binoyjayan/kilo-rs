@@ -73,18 +73,17 @@ impl Editor {
                 EditorEvent::Cursor(direction) => self.screen.move_cursor(direction),
                 EditorEvent::Control(ctrl) => match ctrl {
                     ControlEvent::Quit => {
-                        let quit_times = self.screen.get_quit_times();
+                        let quit_times = self.screen.dec_quit_times();
                         if self.screen.is_dirty() && quit_times > 0 {
                             let msg = format!("WARNING: File has unsaved changes. Press Ctrl-Q {} more time(s) to quit", quit_times);
                             self.screen.set_status(&msg);
-                            self.screen.dec_quit_times();
                             return Ok(false);
                         } else {
                             return Ok(true);
                         }
                     }
                     ControlEvent::Save => self.save(),
-                    ControlEvent::CtrlH => {}
+                    ControlEvent::CtrlH => self.screen.del_char(),
                 },
             },
             Err(e) => {
