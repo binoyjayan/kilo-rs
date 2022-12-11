@@ -44,7 +44,7 @@ impl Input {
                 KeyCode::Delete => Some(EditorEvent::Cursor(CursorKey::Delete)),
                 KeyCode::Backspace => Some(EditorEvent::Cursor(CursorKey::Backspace)),
                 KeyCode::Enter => Some(EditorEvent::Cursor(CursorKey::Enter)),
-                KeyCode::Tab => Some(EditorEvent::Cursor(CursorKey::Tab)),
+                KeyCode::Tab => Some(EditorEvent::Key('\t')),
                 KeyCode::Char(ch) => Some(EditorEvent::Key(ch)),
                 _ => None,
             },

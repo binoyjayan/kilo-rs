@@ -2,11 +2,9 @@ use std::fmt::Display;
 use std::fs;
 
 use crate::events::*;
-use crate::input::*;
 use crate::screen::*;
 
 pub struct Editor {
-    input: Input,
     screen: Screen,
     file: Option<String>,
 }
@@ -34,7 +32,6 @@ impl Editor {
 
     pub fn create(lines: &[String], file: Option<String>) -> crossterm::Result<Self> {
         Ok(Self {
-            input: Input::new(),
             screen: Screen::new(lines, file.clone())?,
             file,
         })
@@ -63,7 +60,7 @@ impl Editor {
     }
 
     pub fn event(&mut self) -> crossterm::Result<bool> {
-        let result = self.input.read();
+        let result = self.screen.read();
 
         match result {
             Ok(event) => match event {
@@ -83,7 +80,7 @@ impl Editor {
                         }
                     }
                     ControlEvent::Save => self.save(),
-                    ControlEvent::CtrlH => self.screen.del_char(),
+                    ControlEvent::CtrlH => self.screen.delete_char(),
                 },
             },
             Err(e) => {

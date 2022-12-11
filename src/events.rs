@@ -11,7 +11,6 @@ pub enum CursorKey {
     Delete,
     Backspace,
     Enter,
-    Tab,
 }
 
 #[derive(Debug, Copy, Clone)]

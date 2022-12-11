@@ -11,9 +11,11 @@ use std::time::Duration;
 use crate::cursor::*;
 use crate::data::*;
 use crate::events::*;
+use crate::input::*;
 use crate::window::*;
 
 pub struct Screen {
+    input: Input,
     stdout: io::Stdout,
     window: Window,
     cursor: Position,
@@ -34,6 +36,7 @@ impl Screen {
     pub fn new(lines: &[String], file: Option<String>) -> crossterm::Result<Self> {
         let (width, height) = crossterm::terminal::size()?;
         Ok(Self {
+            input: Input::new(),
             stdout: io::stdout(),
             // One row on the bottom for status bar
             window: Window::new(width, height - 2),
@@ -50,23 +53,20 @@ impl Screen {
     }
 
     pub fn make_editrows(lines: &[String]) -> Vec<EditRow> {
-        let mut editrows = lines
+        let editrows = lines
             .iter()
             .map(|line| EditRow::new(line.to_string()))
             .collect::<Vec<EditRow>>();
 
-        // TODO: Remove last line if it is empty?
-        if !editrows.is_empty() {
-            let last = editrows.iter().last().unwrap();
-            if last.chars.is_empty() {
-                editrows.pop();
-            }
-        }
         editrows
     }
 
     pub fn open(&mut self) -> crossterm::Result<()> {
         terminal::enable_raw_mode()
+    }
+
+    pub fn read(&self) -> crossterm::Result<EditorEvent> {
+        self.input.read()
     }
 
     pub fn clear(&mut self) -> crossterm::Result<()> {
@@ -307,10 +307,12 @@ impl Screen {
             }
             CursorKey::Delete => {
                 self.move_cursor(CursorKey::Right);
-                self.del_char();
+                self.delete_char();
             }
-            CursorKey::Backspace => self.del_char(),
-            CursorKey::Enter | CursorKey::Tab => {}
+            CursorKey::Backspace => self.delete_char(),
+            CursorKey::Enter => {
+                self.insert_newline();
+            }
         }
         // Find the number of characters on the editrow
         let rowlen = if self.cursor.y as usize >= self.editrows.len() {
@@ -356,7 +358,7 @@ impl Screen {
 
     pub fn insert_char(&mut self, ch: char) {
         if (self.cursor.y as usize) == self.editrows.len() {
-            self.editrows.push(EditRow::new(String::new()));
+            self.insert_row(self.editrows.len(), "");
         }
         let cy = self.cursor.y as usize;
         let cx = self.cursor.x as usize;
@@ -366,7 +368,7 @@ impl Screen {
     }
 
     // Delete character left of the cursor
-    pub fn del_char(&mut self) {
+    pub fn delete_char(&mut self) {
         let cy = self.cursor.y as usize;
         let cx = self.cursor.x as usize;
 
@@ -375,18 +377,41 @@ impl Screen {
         }
         let s = self.editrows[cy].chars.clone();
         if cx > 0 {
-            self.editrows[cy].del_char(cx - 1);
+            self.editrows[cy].delete_char(cx - 1);
             self.cursor.x = (cx - 1) as u16;
         } else {
             self.cursor.x = self.editrows[cy - 1].chars.len() as u16;
             self.editrows[cy - 1].append_str(&s);
-            self.del_row(cy);
+            self.delete_row(cy);
             self.cursor.y -= 1;
         }
         self.set_dirty(true);
     }
 
-    pub fn del_row(&mut self, at: usize) {
+    pub fn insert_row(&mut self, at: usize, s: &str) {
+        if at > self.editrows.len() {
+            return;
+        }
+        self.editrows.insert(at, EditRow::new(s.to_string()));
+    }
+
+    pub fn insert_newline(&mut self) {
+        let cy = self.cursor.y as usize;
+        let cx = self.cursor.x as usize;
+        // if cursor is at the beginning, just insert a new row at the current row index,
+        // else split the current row. Either way increment 'y' and set 'x' to 0.
+        if cx == 0 {
+            self.insert_row(cy, "")
+        } else {
+            let new_row = self.editrows[cy].split(cx);
+            self.editrows.insert(cy + 1, new_row);
+        }
+        self.cursor.y += 1;
+        self.cursor.x = 0;
+        self.set_dirty(true);
+    }
+
+    pub fn delete_row(&mut self, at: usize) {
         if at >= self.editrows.len() {
             return;
         }

@@ -1,4 +1,4 @@
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct EditRow {
     pub chars: String,  // characters in the file
     pub render: String, // characters rendered on the screen
@@ -62,11 +62,18 @@ impl EditRow {
         self.render = Self::render_chars(&self.chars);
     }
 
-    pub fn del_char(&mut self, idx: usize) {
+    pub fn delete_char(&mut self, idx: usize) {
         if idx >= self.chars.len() {
             return;
         }
         self.chars.remove(idx).to_string();
         self.render = Self::render_chars(&self.chars);
+    }
+
+    // Splits the current EditRow object based on index to 'chars' and returns a new one
+    pub fn split(&mut self, at: usize) -> Self {
+        let right = self.chars.split_off(at);
+        self.render = Self::render_chars(&self.chars);
+        Self::new(right)
     }
 }
