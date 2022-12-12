@@ -218,6 +218,44 @@ impl Screen {
         Ok(())
     }
 
+    /*
+     * prompts user for an input string and returns an Ok(Some(String)) or an
+     * Ok(None) if the prompt is cancelled. It can also return an error.
+     */
+    pub fn show_prompt(&mut self, prompt: &str) -> crossterm::Result<Option<String>> {
+        let mut buf = String::new();
+
+        loop {
+            self.set_status(&format!("{}: {}", prompt, buf));
+            self.refresh()?;
+            self.flush()?;
+
+            match self.read() {
+                Ok(event) => match event {
+                    EditorEvent::Cursor(CursorKey::Enter) => {
+                        self.set_status("");
+                        return Ok(Some(buf));
+                    }
+                    EditorEvent::Key(ch) => {
+                        if Input::is_valid_file_char(ch) {
+                            buf.push(ch);
+                        }
+                    }
+                    EditorEvent::Cursor(CursorKey::Backspace)
+                    | EditorEvent::Cursor(CursorKey::Delete) => {
+                        buf.pop();
+                    }
+                    EditorEvent::Control(ControlEvent::Escape) => {
+                        self.set_status("Save cancelled");
+                        return Ok(None);
+                    }
+                    _ => {}
+                },
+                Err(_e) => {}
+            }
+        }
+    }
+
     pub fn flush(&mut self) -> crossterm::Result<()> {
         self.stdout.flush()
     }
@@ -310,9 +348,7 @@ impl Screen {
                 self.delete_char();
             }
             CursorKey::Backspace => self.delete_char(),
-            CursorKey::Enter => {
-                self.insert_newline();
-            }
+            CursorKey::Enter => self.insert_newline(),
         }
         // Find the number of characters on the editrow
         let rowlen = if self.cursor.y as usize >= self.editrows.len() {

@@ -79,8 +79,10 @@ impl Editor {
                             return Ok(true);
                         }
                     }
-                    ControlEvent::Save => self.save(),
-                    ControlEvent::CtrlH => self.screen.delete_char(),
+                    ControlEvent::Save => self.save()?,
+                    ControlEvent::Escape => {
+                        self.screen.set_status("");
+                    }
                 },
             },
             Err(e) => {
@@ -91,18 +93,35 @@ impl Editor {
         Ok(false)
     }
 
-    pub fn save(&mut self) {
-        if let Some(filename) = &self.file {
-            let buf = self.screen.rows_to_string();
-            let msg = match fs::write(filename, &buf) {
-                Ok(_) => {
-                    let file_len = buf.as_bytes().len();
-                    self.screen.set_dirty(false);
-                    format!("{} bytes written to {}", file_len, filename)
-                }
-                Err(e) => format!("Failed to write to {} - {}", filename, e),
-            };
-            self.screen.set_status(&msg);
+    pub fn save(&mut self) -> crossterm::Result<()> {
+        let filename = if let Some(filename) = self.file.clone() {
+            Some(filename)
+        } else {
+            self.screen.show_prompt("Save as")?
+        };
+        if let Some(filename) = filename {
+            if self.save_as(&filename) {
+                self.file = Some(filename);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn save_as(&mut self, filename: &str) -> bool {
+        let buf = self.screen.rows_to_string();
+        match fs::write(filename, &buf) {
+            Ok(_) => {
+                let file_len = buf.as_bytes().len();
+                self.screen.set_dirty(false);
+                self.screen
+                    .set_status(&format!("{} bytes written to {}", file_len, filename));
+                true
+            }
+            Err(e) => {
+                self.screen
+                    .set_status(&format!("Failed to write to '{}' - {}", filename, e));
+                false
+            }
         }
     }
 }

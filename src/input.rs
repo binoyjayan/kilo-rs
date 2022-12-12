@@ -13,6 +13,11 @@ impl Input {
         Self {}
     }
 
+    // Check if ch is a valid file name character
+    pub fn is_valid_file_char(ch: char) -> bool {
+        (' '..='~').contains(&ch)
+    }
+
     // Decode key, return None if it can be ignored
     pub fn key_event(&self, key: KeyEvent) -> Option<EditorEvent> {
         match key {
@@ -23,7 +28,7 @@ impl Input {
                 ..
             } => match ch {
                 'q' => Some(EditorEvent::Control(ControlEvent::Quit)),
-                'h' => Some(EditorEvent::Control(ControlEvent::CtrlH)),
+                'h' => Some(EditorEvent::Cursor(CursorKey::Backspace)),
                 's' => Some(EditorEvent::Control(ControlEvent::Save)),
                 _ => None,
             },
@@ -46,6 +51,7 @@ impl Input {
                 KeyCode::Enter => Some(EditorEvent::Cursor(CursorKey::Enter)),
                 KeyCode::Tab => Some(EditorEvent::Key('\t')),
                 KeyCode::Char(ch) => Some(EditorEvent::Key(ch)),
+                KeyCode::Esc => Some(EditorEvent::Control(ControlEvent::Escape)),
                 _ => None,
             },
             KeyEvent { .. } => None,
