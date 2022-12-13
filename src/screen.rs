@@ -47,7 +47,7 @@ impl Screen {
             file,
             dirty: false,
             quit_times: QUIT_TIMES,
-            status_msg: String::from("Ctrl-Q: quit, Ctrl-S: save"),
+            status_msg: String::from("Ctrl-Q: quit, Ctrl-S: save, Ctrl-F: find"),
             status_time: time::Instant::now(),
         })
     }
@@ -133,12 +133,16 @@ impl Screen {
 
         let mut status_left = if let Some(filename) = &self.file {
             if self.dirty {
-                format!("{} [{} lines, modified ]", filename, self.editrows.len())
+                format!("'{}' {}L, modified", filename, self.editrows.len())
             } else {
-                format!("{} [{} lines]", filename, self.editrows.len())
+                format!("'{}' {}L", filename, self.editrows.len())
             }
         } else {
-            "[No Name]".to_string()
+            if self.dirty {
+                format!("'No Name' {}L, modified", self.editrows.len())
+            } else {
+                format!("'No Name' {}L", self.editrows.len())
+            }
         };
         status_left.truncate(width);
 
@@ -246,7 +250,7 @@ impl Screen {
                         buf.pop();
                     }
                     EditorEvent::Control(ControlEvent::Escape) => {
-                        self.set_status("Save cancelled");
+                        self.set_status("");
                         return Ok(None);
                     }
                     _ => {}
@@ -453,6 +457,23 @@ impl Screen {
         }
         self.editrows.remove(at);
         self.set_dirty(true);
+    }
+
+    pub fn find(&mut self) -> crossterm::Result<()> {
+        if let Some(query) = self.show_prompt("Search (ESC to cancel)")? {
+            for (cy, row) in self.editrows.iter().enumerate() {
+                if let Some(rx) = row.render.find(&query) {
+                    self.cursor.y = cy as u16;
+                    self.cursor.x = row.rx_to_cx(rx as u16) as u16;
+                    self.rowoff = self.editrows.len();
+                    return Ok(());
+                }
+            }
+            self.set_status(&format!("Could not find '{}'", query));
+        } else {
+            self.set_status("Cancelled search");
+        }
+        Ok(())
     }
 
     pub fn is_dirty(&mut self) -> bool {

@@ -4,7 +4,7 @@ pub struct EditRow {
     pub render: String, // characters rendered on the screen
 }
 
-const TABSTOP: usize = 8;
+const TABSTOP: u16 = 8;
 
 impl EditRow {
     fn render_chars(chars: &str) -> String {
@@ -50,6 +50,31 @@ impl EditRow {
             rx += 1;
         }
         rx as u16
+    }
+
+    /*
+     * Loop through the chars string, calculating the current rx value (cur_rx)
+     * as we go. But instead of stopping when we hit a particular cx value and
+     * returning cur_rx, we want to stop when cur_rx hits the given rx value
+     * and return cx. The return statement at the very end is just in case the
+     * caller provided an rx that’s out of range, which shouldn’t happen. The
+     * return statement inside the for loop should handle all rx values that
+     * are valid indexes into render.
+     */
+    pub fn rx_to_cx(&self, rx: u16) -> u16 {
+        let mut cur_rx = 0;
+        let mut cx = 0;
+        for c in self.chars.chars() {
+            if c == '\t' {
+                cur_rx += (TABSTOP - 1) - (cur_rx % TABSTOP);
+            }
+            cur_rx += 1;
+            if cur_rx > rx {
+                return cx;
+            }
+            cx += 1;
+        }
+        cx
     }
 
     pub fn insert_char(&mut self, idx: usize, ch: char) {

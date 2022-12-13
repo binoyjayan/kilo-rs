@@ -18,6 +18,7 @@ pub enum ControlEvent {
     Quit,
     Save,
     Escape,
+    Find,
 }
 
 #[derive(Debug)]

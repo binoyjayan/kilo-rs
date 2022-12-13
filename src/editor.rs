@@ -83,6 +83,9 @@ impl Editor {
                     ControlEvent::Escape => {
                         self.screen.set_status("");
                     }
+                    ControlEvent::Find => {
+                        self.screen.find()?;
+                    }
                 },
             },
             Err(e) => {
@@ -103,6 +106,8 @@ impl Editor {
             if self.save_as(&filename) {
                 self.file = Some(filename);
             }
+        } else {
+            self.screen.set_status("Cancelled save");
         }
         Ok(())
     }
