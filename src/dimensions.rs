@@ -1,4 +1,16 @@
 #[derive(Default, Clone)]
+pub struct Window {
+    pub width: u16,
+    pub height: u16,
+}
+
+impl Window {
+    pub fn new(width: u16, height: u16) -> Self {
+        Self { width, height }
+    }
+}
+
+#[derive(Default, Clone, Copy)]
 pub struct Position {
     pub x: u16,
     pub y: u16,

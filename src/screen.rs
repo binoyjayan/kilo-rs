@@ -8,11 +8,10 @@ use std::io::Write;
 use std::time;
 use std::time::Duration;
 
-use crate::cursor::*;
 use crate::data::*;
 use crate::events::*;
 use crate::input::*;
-use crate::window::*;
+use crate::dimensions::*;
 
 pub struct Screen {
     input: Input,
@@ -28,6 +27,8 @@ pub struct Screen {
     status_msg: String,
     status_time: time::Instant,
 }
+
+type PromptCallback = fn(&mut Screen, &str, EditorEvent) -> bool;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const QUIT_TIMES: u8 = 3;
@@ -131,18 +132,11 @@ impl Screen {
     pub fn draw_status(&mut self) -> crossterm::Result<()> {
         let width = self.window.width as usize;
 
+        let dirty_str = if self.dirty { ", modified" } else { "" };
         let mut status_left = if let Some(filename) = &self.file {
-            if self.dirty {
-                format!("'{}' {}L, modified", filename, self.editrows.len())
-            } else {
-                format!("'{}' {}L", filename, self.editrows.len())
-            }
+            format!("'{}' {}L{}", filename, self.editrows.len(), dirty_str)
         } else {
-            if self.dirty {
-                format!("'No Name' {}L, modified", self.editrows.len())
-            } else {
-                format!("'No Name' {}L", self.editrows.len())
-            }
+            format!("'No Name' {}L{}", self.editrows.len(), dirty_str)
         };
         status_left.truncate(width);
 
@@ -226,7 +220,11 @@ impl Screen {
      * prompts user for an input string and returns an Ok(Some(String)) or an
      * Ok(None) if the prompt is cancelled. It can also return an error.
      */
-    pub fn show_prompt(&mut self, prompt: &str) -> crossterm::Result<Option<String>> {
+    pub fn show_prompt(
+        &mut self,
+        prompt: &str,
+        callback: Option<PromptCallback>,
+    ) -> crossterm::Result<Option<String>> {
         let mut buf = String::new();
 
         loop {
@@ -235,28 +233,39 @@ impl Screen {
             self.flush()?;
 
             match self.read() {
-                Ok(event) => match event {
-                    EditorEvent::Cursor(CursorKey::Enter) => {
-                        self.set_status("");
-                        return Ok(Some(buf));
-                    }
-                    EditorEvent::Key(ch) => {
-                        if Input::is_valid_file_char(ch) {
-                            buf.push(ch);
+                Ok(event) => {
+                    match event {
+                        EditorEvent::Cursor(CursorKey::Enter) => {
+                            self.set_status("");
+                            Self::do_callback(self, callback, &buf, event);
+                            return Ok(Some(buf));
                         }
+                        EditorEvent::Key(ch) => {
+                            if Input::is_valid_file_char(ch) {
+                                buf.push(ch);
+                            }
+                        }
+                        EditorEvent::Cursor(CursorKey::Backspace)
+                        | EditorEvent::Cursor(CursorKey::Delete) => {
+                            buf.pop();
+                        }
+                        EditorEvent::Control(ControlEvent::Escape) => {
+                            self.set_status("");
+                            Self::do_callback(self, callback, &buf, event);
+                            return Ok(None);
+                        }
+                        _ => {}
                     }
-                    EditorEvent::Cursor(CursorKey::Backspace)
-                    | EditorEvent::Cursor(CursorKey::Delete) => {
-                        buf.pop();
-                    }
-                    EditorEvent::Control(ControlEvent::Escape) => {
-                        self.set_status("");
-                        return Ok(None);
-                    }
-                    _ => {}
-                },
+                    Self::do_callback(self, callback, &buf, event);
+                }
                 Err(_e) => {}
             }
+        }
+    }
+
+    fn do_callback(&mut self, callback: Option<PromptCallback>, buf: &str, event: EditorEvent) {
+        if let Some(callback) = callback {
+            callback(self, buf, event);
         }
     }
 
@@ -460,20 +469,39 @@ impl Screen {
     }
 
     pub fn find(&mut self) -> crossterm::Result<()> {
-        if let Some(query) = self.show_prompt("Search (ESC to cancel)")? {
-            for (cy, row) in self.editrows.iter().enumerate() {
-                if let Some(rx) = row.render.find(&query) {
-                    self.cursor.y = cy as u16;
-                    self.cursor.x = row.rx_to_cx(rx as u16) as u16;
-                    self.rowoff = self.editrows.len();
-                    return Ok(());
-                }
+        let saved_cursor = self.cursor;
+        let saved_coloff = self.coloff;
+        let saved_rowoff = self.rowoff;
+
+        if let Some(query) =
+            self.show_prompt("Search (ESC to cancel)", Some(Self::find_callback))?
+        {
+            if !self.find_callback(&query, EditorEvent::Cursor(CursorKey::Enter)) {
+                self.set_status(&format!("Could not find '{}'", query));
             }
-            self.set_status(&format!("Could not find '{}'", query));
         } else {
+            self.cursor = saved_cursor;
+            self.coloff = saved_coloff;
+            self.rowoff = saved_rowoff;
             self.set_status("Cancelled search");
         }
         Ok(())
+    }
+
+    pub fn find_callback(&mut self, query: &str, event: EditorEvent) -> bool {
+        if matches!(event, EditorEvent::Control(ControlEvent::Escape)) {
+            return false;
+        }
+
+        for (cy, row) in self.editrows.iter().enumerate() {
+            if let Some(rx) = row.render.find(query) {
+                self.cursor.y = cy as u16;
+                self.cursor.x = row.rx_to_cx(rx as u16) as u16;
+                self.rowoff = self.editrows.len();
+                return true;
+            }
+        }
+        false
     }
 
     pub fn is_dirty(&mut self) -> bool {

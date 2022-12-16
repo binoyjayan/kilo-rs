@@ -100,7 +100,7 @@ impl Editor {
         let filename = if let Some(filename) = self.file.clone() {
             Some(filename)
         } else {
-            self.screen.show_prompt("Save as")?
+            self.screen.show_prompt("Save as", None)?
         };
         if let Some(filename) = filename {
             if self.save_as(&filename) {
