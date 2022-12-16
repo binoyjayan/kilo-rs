@@ -12,6 +12,7 @@ use crate::data::*;
 use crate::dimensions::*;
 use crate::events::*;
 use crate::input::*;
+use crate::search::*;
 
 pub struct Screen {
     input: Input,
@@ -26,8 +27,7 @@ pub struct Screen {
     quit_times: u8,
     status_msg: String,
     status_time: time::Instant,
-    last_match: Option<usize>,
-    search_direction: SearchDirection,
+    search_info: SearchInfo,
 }
 
 type PromptCallback = fn(&mut Screen, &str, EditorEvent) -> bool;
@@ -52,8 +52,7 @@ impl Screen {
             quit_times: QUIT_TIMES,
             status_msg: String::from("Ctrl-Q: quit, Ctrl-S: save, Ctrl-F: find"),
             status_time: time::Instant::now(),
-            last_match: None,
-            search_direction: SearchDirection::Forwards,
+            search_info: SearchInfo::new(),
         })
     }
 
@@ -123,11 +122,29 @@ impl Screen {
                     continue;
                 }
                 let colend = colstart + len;
+                let curr_row = self.editrows[filerow].render[colstart..colend].to_string();
+                let curr_highlight = self.editrows[filerow].highlight[colstart..colend].to_vec();
+                let mut curr_color = style::Color::Reset;
+
+                self.stdout.queue(cursor::MoveTo(0_u16, y))?;
+                for (c, hl) in curr_row.chars().zip(curr_highlight) {
+                    if hl.is_normal() {
+                        if curr_color != style::Color::Reset {
+                            self.stdout
+                                .queue(style::SetForegroundColor(style::Color::Reset))?;
+                            curr_color = style::Color::Reset;
+                        }
+                    } else {
+                        let color = style::Color::from(hl);
+                        if color != curr_color {
+                            self.stdout.queue(style::SetForegroundColor(color))?;
+                            curr_color = color;
+                        }
+                    }
+                    self.stdout.queue(style::Print(c))?;
+                }
                 self.stdout
-                    .queue(cursor::MoveTo(0, y))?
-                    .queue(style::Print(
-                        self.editrows[filerow].render[colstart..colend].to_string(),
-                    ))?;
+                    .queue(style::SetForegroundColor(style::Color::Reset))?;
             }
         }
         Ok(())
@@ -266,6 +283,7 @@ impl Screen {
                                 &buf,
                                 EditorEvent::Cursor(CursorKey::Right),
                             );
+                            continue;
                         }
                         EditorEvent::Cursor(CursorKey::Left)
                         | EditorEvent::Cursor(CursorKey::Up) => {
@@ -275,6 +293,7 @@ impl Screen {
                                 &buf,
                                 EditorEvent::Cursor(CursorKey::Left),
                             );
+                            continue;
                         }
                         _ => {}
                     }
@@ -507,57 +526,83 @@ impl Screen {
             self.rowoff = saved_rowoff;
             self.set_status("Cancelled search");
         }
+        self.restore_highlight();
         Ok(())
     }
 
     pub fn find_callback(&mut self, query: &str, event: EditorEvent) -> bool {
+        self.restore_highlight();
+
         match event {
             EditorEvent::Control(ControlEvent::Escape) => {
-                self.last_match = None;
-                self.search_direction = SearchDirection::Forwards;
+                self.search_info.last_match = None;
+                self.search_info.direction = SearchDirection::Forwards;
                 return false;
             }
             EditorEvent::Cursor(CursorKey::Right) => {
-                self.search_direction = SearchDirection::Forwards;
+                self.search_info.direction = SearchDirection::Forwards;
             }
             EditorEvent::Cursor(CursorKey::Left) => {
-                self.search_direction = SearchDirection::Backwards;
+                self.search_info.direction = SearchDirection::Backwards;
             }
             _ => {}
         }
 
-        let mut current = if let Some(last_match) = self.last_match {
+        let mut current = if let Some(last_match) = self.search_info.last_match {
             last_match
         } else {
-            self.search_direction = SearchDirection::Forwards;
+            self.search_info.direction = SearchDirection::Forwards;
             0
         };
+        /* Perform 'editrows.len()' iterations so that each row is searched for
+         * atleast once but not necessarily in the order of its indices, but
+         * starting with index 'current', moving forward, wrapping back to 0
+         * when 'current' reaches the end. Set the cursor to the matched string
+         * and return when upon finding a match.
+         */
         for _ in self.editrows.iter() {
-            match self.search_direction {
-                SearchDirection::Forwards => {
-                    current = if current >= (self.editrows.len() - 1) {
-                        0
-                    } else {
-                        current + 1
-                    };
-                }
-                SearchDirection::Backwards => {
-                    current = if current == 0 {
-                        self.editrows.len() - 1
-                    } else {
-                        current - 1
-                    };
+            if matches!(
+                event,
+                EditorEvent::Cursor(CursorKey::Left) | EditorEvent::Cursor(CursorKey::Right)
+            ) {
+                // Change cursor only when arrow keys are used for next/prev search
+                match self.search_info.direction {
+                    SearchDirection::Forwards => {
+                        current = if current >= (self.editrows.len() - 1) {
+                            0
+                        } else {
+                            current + 1
+                        };
+                    }
+                    SearchDirection::Backwards => {
+                        current = if current == 0 {
+                            self.editrows.len() - 1
+                        } else {
+                            current - 1
+                        };
+                    }
                 }
             }
+
             if let Some(rx) = self.editrows[current].render.find(query) {
-                self.last_match = Some(current);
+                self.search_info.last_match = Some(current);
                 self.cursor.y = current as u16;
                 self.cursor.x = self.editrows[current].rx_to_cx(rx as u16) as u16;
                 self.rowoff = self.editrows.len();
+                let saved_hl = self.editrows[current].highlight.clone();
+                self.search_info.saved_highlight = Some(SavedHighlight::new(current, saved_hl));
+                self.editrows[current].highlight_match(rx, query.len());
                 return true;
             }
         }
         false
+    }
+
+    fn restore_highlight(&mut self) {
+        if let Some(saved_hl) = &self.search_info.saved_highlight {
+            self.editrows[saved_hl.line].highlight = saved_hl.highlight.clone();
+            self.search_info.saved_highlight = None;
+        }
     }
 
     pub fn is_dirty(&mut self) -> bool {

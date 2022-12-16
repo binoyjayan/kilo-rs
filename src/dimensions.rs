@@ -22,8 +22,3 @@ impl Position {
         Self { x, y, rx: 0 }
     }
 }
-
-pub enum SearchDirection {
-    Forwards,
-    Backwards,
-}

@@ -1,7 +1,10 @@
-#[derive(Default, Clone)]
+use crate::syntax::*;
+
+#[derive(Clone)]
 pub struct EditRow {
-    pub chars: String,  // characters in the file
-    pub render: String, // characters rendered on the screen
+    pub chars: String,             // characters in the file
+    pub render: String,            // characters rendered on the screen
+    pub highlight: Vec<Highlight>, // highlight for each character in 'render'
 }
 
 const TABSTOP: u16 = 8;
@@ -25,9 +28,20 @@ impl EditRow {
         }
         render
     }
+
+    pub fn update_row(&mut self) {
+        self.render = Self::render_chars(&self.chars);
+        self.update_syntax();
+    }
+
     pub fn new(chars: String) -> Self {
-        let render = Self::render_chars(&chars);
-        Self { chars, render }
+        let mut newrow = Self {
+            chars,
+            render: String::new(),
+            highlight: Vec::new(),
+        };
+        newrow.update_row();
+        newrow
     }
 
     /* Loop through all the characters to the left of cx to figure out how
@@ -79,12 +93,12 @@ impl EditRow {
 
     pub fn insert_char(&mut self, idx: usize, ch: char) {
         self.chars.insert(idx, ch);
-        self.render = Self::render_chars(&self.chars);
+        self.update_row();
     }
 
     pub fn append_str(&mut self, s: &str) {
         self.chars.push_str(s);
-        self.render = Self::render_chars(&self.chars);
+        self.update_row();
     }
 
     pub fn delete_char(&mut self, idx: usize) {
@@ -92,13 +106,54 @@ impl EditRow {
             return;
         }
         self.chars.remove(idx).to_string();
-        self.render = Self::render_chars(&self.chars);
+        self.update_row();
     }
 
     // Splits the current EditRow object based on index to 'chars' and returns a new one
     pub fn split(&mut self, at: usize) -> Self {
         let right = self.chars.split_off(at);
-        self.render = Self::render_chars(&self.chars);
+        self.update_row();
         Self::new(right)
+    }
+
+    fn update_syntax(&mut self) {
+        self.highlight = vec![Highlight::Normal; self.render.len()];
+        let render_chars: Vec<char> = self.render.chars().collect();
+        let mut i = 0;
+        let mut prev_sep = true;
+
+        while i < render_chars.len() {
+            let c = render_chars[i];
+            let prev_hl = if i > 0 {
+                self.highlight[i - 1]
+            } else {
+                Highlight::Normal
+            };
+
+            if (c.is_ascii_digit() && (prev_sep || prev_hl == Highlight::Number))
+                || (c == '.' && prev_hl == Highlight::Number)
+            {
+                self.highlight[i] = Highlight::Number;
+                i += 1;
+                prev_sep = false;
+                continue;
+            }
+            prev_sep = Self::is_separator(c);
+            i += 1;
+        }
+    }
+
+    pub fn is_separator(ch: char) -> bool {
+        ch.is_ascii_whitespace()
+            || [
+                ',', '.', '(', ')', '+', '-', '*', '/', '=', '~', '%', '<', '>', '[', ']', ';',
+            ]
+            .contains(&ch)
+    }
+
+    pub fn highlight_match(&mut self, start: usize, len: usize) {
+        for c in self.highlight[start..start + len].iter_mut() {
+            *c = Highlight::Match
+        }
     }
 }

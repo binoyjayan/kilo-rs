@@ -6,6 +6,8 @@ mod editor;
 mod events;
 mod input;
 mod screen;
+mod search;
+mod syntax;
 
 fn main() -> crossterm::Result<()> {
     let args: Vec<String> = std::env::args().collect();
