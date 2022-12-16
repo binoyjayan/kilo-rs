@@ -9,9 +9,9 @@ use std::time;
 use std::time::Duration;
 
 use crate::data::*;
+use crate::dimensions::*;
 use crate::events::*;
 use crate::input::*;
-use crate::dimensions::*;
 
 pub struct Screen {
     input: Input,
@@ -26,6 +26,8 @@ pub struct Screen {
     quit_times: u8,
     status_msg: String,
     status_time: time::Instant,
+    last_match: Option<usize>,
+    search_direction: SearchDirection,
 }
 
 type PromptCallback = fn(&mut Screen, &str, EditorEvent) -> bool;
@@ -50,6 +52,8 @@ impl Screen {
             quit_times: QUIT_TIMES,
             status_msg: String::from("Ctrl-Q: quit, Ctrl-S: save, Ctrl-F: find"),
             status_time: time::Instant::now(),
+            last_match: None,
+            search_direction: SearchDirection::Forwards,
         })
     }
 
@@ -254,6 +258,24 @@ impl Screen {
                             Self::do_callback(self, callback, &buf, event);
                             return Ok(None);
                         }
+                        EditorEvent::Cursor(CursorKey::Right)
+                        | EditorEvent::Cursor(CursorKey::Down) => {
+                            Self::do_callback(
+                                self,
+                                callback,
+                                &buf,
+                                EditorEvent::Cursor(CursorKey::Right),
+                            );
+                        }
+                        EditorEvent::Cursor(CursorKey::Left)
+                        | EditorEvent::Cursor(CursorKey::Up) => {
+                            Self::do_callback(
+                                self,
+                                callback,
+                                &buf,
+                                EditorEvent::Cursor(CursorKey::Left),
+                            );
+                        }
                         _ => {}
                     }
                     Self::do_callback(self, callback, &buf, event);
@@ -274,7 +296,7 @@ impl Screen {
     }
 
     pub fn position(&self) -> Position {
-        self.cursor.clone()
+        self.cursor
     }
 
     pub fn _read_pos() -> crossterm::Result<Position> {
@@ -474,7 +496,7 @@ impl Screen {
         let saved_rowoff = self.rowoff;
 
         if let Some(query) =
-            self.show_prompt("Search (ESC to cancel)", Some(Self::find_callback))?
+            self.show_prompt("Search (ESC/Arrows/Enter)", Some(Self::find_callback))?
         {
             if !self.find_callback(&query, EditorEvent::Cursor(CursorKey::Enter)) {
                 self.set_status(&format!("Could not find '{}'", query));
@@ -489,14 +511,48 @@ impl Screen {
     }
 
     pub fn find_callback(&mut self, query: &str, event: EditorEvent) -> bool {
-        if matches!(event, EditorEvent::Control(ControlEvent::Escape)) {
-            return false;
+        match event {
+            EditorEvent::Control(ControlEvent::Escape) => {
+                self.last_match = None;
+                self.search_direction = SearchDirection::Forwards;
+                return false;
+            }
+            EditorEvent::Cursor(CursorKey::Right) => {
+                self.search_direction = SearchDirection::Forwards;
+            }
+            EditorEvent::Cursor(CursorKey::Left) => {
+                self.search_direction = SearchDirection::Backwards;
+            }
+            _ => {}
         }
 
-        for (cy, row) in self.editrows.iter().enumerate() {
-            if let Some(rx) = row.render.find(query) {
-                self.cursor.y = cy as u16;
-                self.cursor.x = row.rx_to_cx(rx as u16) as u16;
+        let mut current = if let Some(last_match) = self.last_match {
+            last_match
+        } else {
+            self.search_direction = SearchDirection::Forwards;
+            0
+        };
+        for _ in self.editrows.iter() {
+            match self.search_direction {
+                SearchDirection::Forwards => {
+                    current = if current >= (self.editrows.len() - 1) {
+                        0
+                    } else {
+                        current + 1
+                    };
+                }
+                SearchDirection::Backwards => {
+                    current = if current == 0 {
+                        self.editrows.len() - 1
+                    } else {
+                        current - 1
+                    };
+                }
+            }
+            if let Some(rx) = self.editrows[current].render.find(query) {
+                self.last_match = Some(current);
+                self.cursor.y = current as u16;
+                self.cursor.x = self.editrows[current].rx_to_cx(rx as u16) as u16;
                 self.rowoff = self.editrows.len();
                 return true;
             }

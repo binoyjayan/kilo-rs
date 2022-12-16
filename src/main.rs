@@ -1,11 +1,11 @@
 use crate::editor::*;
 
 mod data;
+mod dimensions;
 mod editor;
 mod events;
 mod input;
 mod screen;
-mod dimensions;
 
 fn main() -> crossterm::Result<()> {
     let args: Vec<String> = std::env::args().collect();
