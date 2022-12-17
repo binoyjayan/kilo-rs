@@ -1,4 +1,4 @@
-use crate::syntax::*;
+use crate::highlight::*;
 
 pub enum SearchDirection {
     Forwards,

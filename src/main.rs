@@ -4,6 +4,7 @@ mod data;
 mod dimensions;
 mod editor;
 mod events;
+mod highlight;
 mod input;
 mod screen;
 mod search;

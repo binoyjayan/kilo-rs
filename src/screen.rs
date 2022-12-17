@@ -13,6 +13,7 @@ use crate::dimensions::*;
 use crate::events::*;
 use crate::input::*;
 use crate::search::*;
+use crate::syntax::*;
 
 pub struct Screen {
     input: Input,
@@ -28,6 +29,7 @@ pub struct Screen {
     status_msg: String,
     status_time: time::Instant,
     search_info: SearchInfo,
+    syntax: Option<&'static Syntax>,
 }
 
 type PromptCallback = fn(&mut Screen, &str, EditorEvent) -> bool;
@@ -53,6 +55,7 @@ impl Screen {
             status_msg: String::from("Ctrl-Q: quit, Ctrl-S: save, Ctrl-F: find"),
             status_time: time::Instant::now(),
             search_info: SearchInfo::new(),
+            syntax: None,
         })
     }
 
@@ -161,7 +164,17 @@ impl Screen {
         };
         status_left.truncate(width);
 
-        let msg_right = format!("{}/{}", self.cursor.y + 1, self.editrows.len());
+        let file_type = if let Some(ft) = self.syntax {
+            ft.filetype.to_string()
+        } else {
+            "[no ft]".to_string()
+        };
+        let msg_right = format!(
+            "{} {}/{}",
+            file_type,
+            self.cursor.y + 1,
+            self.editrows.len()
+        );
 
         let mut status_right = String::new();
         if status_left.len() < self.window.width as usize - msg_right.len() {
