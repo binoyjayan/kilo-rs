@@ -135,6 +135,22 @@ impl EditRow {
 
             #[allow(clippy::collapsible_if)]
             if let Some(syntax) = syntax {
+                // Highlight single line comments
+                if let Some(scs) = &syntax.comment.single {
+                    let s = if i + scs.len() <= self.render.len() {
+                        &self.render[i..i + scs.len()]
+                    } else {
+                        ""
+                    };
+                    if in_string == '\0' && s == scs {
+                        while i < self.render.len() {
+                            self.highlight[i] = Highlight::Comment;
+                            i += 1;
+                        }
+                    }
+                }
+
+                // Highlight numbers
                 if syntax.flags & NUMBERS != 0 {
                     if (c.is_ascii_digit() && (prev_sep || prev_hl == Highlight::Number))
                         || (c == '.' && prev_hl == Highlight::Number)
@@ -146,6 +162,7 @@ impl EditRow {
                     }
                 }
 
+                // Highlight strings
                 if syntax.flags & STRINGS != 0 {
                     if in_string != '\0' {
                         self.highlight[i] = Highlight::Str;

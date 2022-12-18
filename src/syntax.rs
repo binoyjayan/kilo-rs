@@ -20,14 +20,14 @@ impl fmt::Display for FileType {
 }
 
 pub struct Comment {
-    _single: Option<String>,
-    _multiline: Option<(String, String)>,
+    pub single: Option<String>,
+    pub _multiline: Option<(String, String)>,
 }
 
 impl Comment {
     pub fn new(single: Option<&str>, multiline: Option<(&str, &str)>) -> Self {
         Self {
-            _single: single.map(|s| s.to_string()),
+            single: single.map(|s| s.to_string()),
             _multiline: multiline.map(|(s, e)| (s.to_string(), e.to_string())),
         }
     }
@@ -37,7 +37,7 @@ pub struct Syntax {
     pub filetype: FileType,
     pub filematch: Vec<String>,
     pub flags: SyntaxFlags,
-    pub _comment: Comment,
+    pub comment: Comment,
 }
 
 impl Syntax {
@@ -45,13 +45,13 @@ impl Syntax {
         filetype: FileType,
         filematch: Vec<&str>,
         flags: SyntaxFlags,
-        _comment: Comment,
+        comment: Comment,
     ) -> Self {
         Self {
             filetype,
             filematch: filematch.iter().map(|s| s.to_string()).collect(),
             flags,
-            _comment,
+            comment,
         }
     }
 }
