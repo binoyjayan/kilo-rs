@@ -38,7 +38,11 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const QUIT_TIMES: u8 = 3;
 
 impl Screen {
-    pub fn new(lines: &[String], file: Option<String>) -> crossterm::Result<Self> {
+    pub fn new(
+        lines: &[String],
+        file: Option<String>,
+        syntax: Option<&'static Syntax>,
+    ) -> crossterm::Result<Self> {
         let (width, height) = crossterm::terminal::size()?;
         Ok(Self {
             input: Input::new(),
@@ -46,7 +50,7 @@ impl Screen {
             // One row on the bottom for status bar
             window: Window::new(width, height - 2),
             cursor: Position::new(0, 0),
-            editrows: Self::make_editrows(lines),
+            editrows: Self::make_editrows(lines, syntax),
             rowoff: 0,
             coloff: 0,
             file,
@@ -55,17 +59,24 @@ impl Screen {
             status_msg: String::from("Ctrl-Q: quit, Ctrl-S: save, Ctrl-F: find"),
             status_time: time::Instant::now(),
             search_info: SearchInfo::new(),
-            syntax: None,
+            syntax,
         })
     }
 
-    pub fn make_editrows(lines: &[String]) -> Vec<EditRow> {
+    pub fn make_editrows(lines: &[String], syntax: Option<&'static Syntax>) -> Vec<EditRow> {
         let editrows = lines
             .iter()
-            .map(|line| EditRow::new(line.to_string()))
+            .map(|line| EditRow::new(line.to_string(), syntax))
             .collect::<Vec<EditRow>>();
 
         editrows
+    }
+
+    pub fn set_syntax(&mut self, syntax: Option<&'static Syntax>) {
+        self.syntax = syntax;
+        for row in self.editrows.iter_mut() {
+            row.update_row(syntax);
+        }
     }
 
     pub fn open(&mut self) -> crossterm::Result<()> {
@@ -465,7 +476,7 @@ impl Screen {
         }
         let cy = self.cursor.y as usize;
         let cx = self.cursor.x as usize;
-        self.editrows[cy].insert_char(cx, ch);
+        self.editrows[cy].insert_char(cx, ch, self.syntax);
         self.cursor.x += 1;
         self.set_dirty(true);
     }
@@ -480,11 +491,11 @@ impl Screen {
         }
         let s = self.editrows[cy].chars.clone();
         if cx > 0 {
-            self.editrows[cy].delete_char(cx - 1);
+            self.editrows[cy].delete_char(cx - 1, self.syntax);
             self.cursor.x = (cx - 1) as u16;
         } else {
             self.cursor.x = self.editrows[cy - 1].chars.len() as u16;
-            self.editrows[cy - 1].append_str(&s);
+            self.editrows[cy - 1].append_str(&s, self.syntax);
             self.delete_row(cy);
             self.cursor.y -= 1;
         }
@@ -495,7 +506,8 @@ impl Screen {
         if at > self.editrows.len() {
             return;
         }
-        self.editrows.insert(at, EditRow::new(s.to_string()));
+        self.editrows
+            .insert(at, EditRow::new(s.to_string(), self.syntax));
     }
 
     pub fn insert_newline(&mut self) {
@@ -506,7 +518,7 @@ impl Screen {
         if cx == 0 {
             self.insert_row(cy, "")
         } else {
-            let new_row = self.editrows[cy].split(cx);
+            let new_row = self.editrows[cy].split(cx, self.syntax);
             self.editrows.insert(cy + 1, new_row);
         }
         self.cursor.y += 1;

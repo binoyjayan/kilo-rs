@@ -1,4 +1,5 @@
 use crate::highlight::*;
+use crate::syntax::*;
 
 #[derive(Clone)]
 pub struct EditRow {
@@ -29,18 +30,18 @@ impl EditRow {
         render
     }
 
-    pub fn update_row(&mut self) {
+    pub fn update_row(&mut self, syntax: Option<&'static Syntax>) {
         self.render = Self::render_chars(&self.chars);
-        self.update_syntax();
+        self.update_syntax(syntax);
     }
 
-    pub fn new(chars: String) -> Self {
+    pub fn new(chars: String, syntax: Option<&'static Syntax>) -> Self {
         let mut newrow = Self {
             chars,
             render: String::new(),
             highlight: Vec::new(),
         };
-        newrow.update_row();
+        newrow.update_row(syntax);
         newrow
     }
 
@@ -91,32 +92,32 @@ impl EditRow {
         cx
     }
 
-    pub fn insert_char(&mut self, idx: usize, ch: char) {
+    pub fn insert_char(&mut self, idx: usize, ch: char, syntax: Option<&'static Syntax>) {
         self.chars.insert(idx, ch);
-        self.update_row();
+        self.update_row(syntax);
     }
 
-    pub fn append_str(&mut self, s: &str) {
+    pub fn append_str(&mut self, s: &str, syntax: Option<&'static Syntax>) {
         self.chars.push_str(s);
-        self.update_row();
+        self.update_row(syntax);
     }
 
-    pub fn delete_char(&mut self, idx: usize) {
+    pub fn delete_char(&mut self, idx: usize, syntax: Option<&'static Syntax>) {
         if idx >= self.chars.len() {
             return;
         }
         self.chars.remove(idx).to_string();
-        self.update_row();
+        self.update_row(syntax);
     }
 
     // Splits the current EditRow object based on index to 'chars' and returns a new one
-    pub fn split(&mut self, at: usize) -> Self {
+    pub fn split(&mut self, at: usize, syntax: Option<&'static Syntax>) -> Self {
         let right = self.chars.split_off(at);
-        self.update_row();
-        Self::new(right)
+        self.update_row(syntax);
+        Self::new(right, syntax)
     }
 
-    fn update_syntax(&mut self) {
+    fn update_syntax(&mut self, syntax: Option<&'static Syntax>) {
         self.highlight = vec![Highlight::Normal; self.render.len()];
         let render_chars: Vec<char> = self.render.chars().collect();
         let mut i = 0;
@@ -130,14 +131,20 @@ impl EditRow {
                 Highlight::Normal
             };
 
-            if (c.is_ascii_digit() && (prev_sep || prev_hl == Highlight::Number))
-                || (c == '.' && prev_hl == Highlight::Number)
-            {
-                self.highlight[i] = Highlight::Number;
-                i += 1;
-                prev_sep = false;
-                continue;
+            #[allow(clippy::collapsible_if)]
+            if let Some(syntax) = syntax {
+                if syntax.flags & NUMBERS != 0 {
+                    if (c.is_ascii_digit() && (prev_sep || prev_hl == Highlight::Number))
+                        || (c == '.' && prev_hl == Highlight::Number)
+                    {
+                        self.highlight[i] = Highlight::Number;
+                        i += 1;
+                        prev_sep = false;
+                        continue;
+                    }
+                }
             }
+
             prev_sep = Self::is_separator(c);
             i += 1;
         }

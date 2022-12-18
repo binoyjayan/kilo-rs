@@ -1,8 +1,11 @@
+use std::ffi;
 use std::fmt::Display;
 use std::fs;
+use std::path;
 
 use crate::events::*;
 use crate::screen::*;
+use crate::syntax::*;
 
 pub struct Editor {
     screen: Screen,
@@ -11,13 +14,32 @@ pub struct Editor {
 
 impl Editor {
     pub fn new() -> crossterm::Result<Self> {
-        Self::create(&[], None)
+        Self::create(&[], None, None)
     }
 
     pub fn open(file: &str) -> crossterm::Result<Self> {
         let data = Self::read_file(file);
         let lines: Vec<String> = data.split('\n').map(|s: &str| s.to_string()).collect();
-        Self::create(&lines, Some(file.to_string()))
+        let syntax = Self::file_syntax(file)?;
+        Self::create(&lines, Some(file.to_string()), syntax)
+    }
+
+    /*
+     * Look up the syntax highlight database for the file extension and file
+     * a reference to the syntax object for the file type.
+     */
+    fn file_syntax(filename: &str) -> crossterm::Result<Option<&'static Syntax>> {
+        let path = path::Path::new(&filename).canonicalize()?;
+        if let Some(extension) = path.extension().and_then(ffi::OsStr::to_str) {
+            for syntax in HLDB.iter() {
+                for ext in syntax.filematch.iter() {
+                    if ext == extension {
+                        return Ok(Some(syntax));
+                    }
+                }
+            }
+        }
+        Ok(None)
     }
 
     fn read_file(file: &str) -> String {
@@ -30,9 +52,13 @@ impl Editor {
         }
     }
 
-    pub fn create(lines: &[String], file: Option<String>) -> crossterm::Result<Self> {
+    pub fn create(
+        lines: &[String],
+        file: Option<String>,
+        syntax: Option<&'static Syntax>,
+    ) -> crossterm::Result<Self> {
         Ok(Self {
-            screen: Screen::new(lines, file.clone())?,
+            screen: Screen::new(lines, file.clone(), syntax)?,
             file,
         })
     }
@@ -104,6 +130,7 @@ impl Editor {
         };
         if let Some(filename) = filename {
             if self.save_as(&filename) {
+                self.screen.set_syntax(Self::file_syntax(&filename)?);
                 self.file = Some(filename);
             }
         } else {
