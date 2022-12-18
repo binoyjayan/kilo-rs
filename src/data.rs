@@ -122,6 +122,8 @@ impl EditRow {
         let render_chars: Vec<char> = self.render.chars().collect();
         let mut i = 0;
         let mut prev_sep = true;
+        // could be any one of [", ', \0]
+        let mut in_string: char = '\0';
 
         while i < render_chars.len() {
             let c = render_chars[i];
@@ -141,6 +143,30 @@ impl EditRow {
                         i += 1;
                         prev_sep = false;
                         continue;
+                    }
+                }
+
+                if syntax.flags & STRINGS != 0 {
+                    if in_string != '\0' {
+                        self.highlight[i] = Highlight::Str;
+                        if c == '\\' && i + 1 < render_chars.len() {
+                            self.highlight[i + 1] = Highlight::Str;
+                            i += 1;
+                        } else {
+                            if c == in_string {
+                                in_string = '\0';
+                            }
+                            prev_sep = true;
+                        }
+                        i += 1;
+                        continue;
+                    } else {
+                        if c == '"' || c == '\'' {
+                            in_string = c;
+                            self.highlight[i] = Highlight::Str;
+                            i += 1;
+                            continue;
+                        }
                     }
                 }
             }

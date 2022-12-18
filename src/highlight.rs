@@ -4,6 +4,7 @@ use crossterm::style;
 pub enum Highlight {
     Normal,
     Number,
+    Str,
     Match,
 }
 
@@ -18,6 +19,7 @@ impl From<Highlight> for style::Color {
         match highlight {
             Highlight::Normal => style::Color::White,
             Highlight::Number => style::Color::Red,
+            Highlight::Str => style::Color::Magenta,
             Highlight::Match => style::Color::Blue,
         }
     }
