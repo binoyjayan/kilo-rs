@@ -33,11 +33,17 @@ impl Comment {
     }
 }
 
+pub enum Keyword {
+    Base(String),
+    Type(String),
+}
+
 pub struct Syntax {
     pub filetype: FileType,
     pub filematch: Vec<String>,
     pub flags: SyntaxFlags,
     pub comment: Comment,
+    pub keywords: Vec<Keyword>,
 }
 
 impl Syntax {
@@ -46,12 +52,14 @@ impl Syntax {
         filematch: Vec<&str>,
         flags: SyntaxFlags,
         comment: Comment,
+        keywords: Vec<Keyword>,
     ) -> Self {
         Self {
             filetype,
             filematch: filematch.iter().map(|s| s.to_string()).collect(),
             flags,
             comment,
+            keywords,
         }
     }
 }
@@ -61,15 +69,66 @@ lazy_static! {
     pub static ref HLDB: Vec<Syntax> = vec![
         Syntax::new(
             FileType::C,
-            vec!["c", "h"],
+            vec!["c", "h", "cc", "cpp", "hpp"],
             NUMBERS | STRINGS,
-            Comment::new(Some("//"), Some(("/*", "*/")))
+            Comment::new(Some("//"), Some(("/*", "*/"))),
+            vec![
+                Keyword::Base("switch".into()),
+                Keyword::Base("if".into()),
+                Keyword::Base("else".into()),
+                Keyword::Base("for".into()),
+                Keyword::Base("while".into()),
+                Keyword::Base("break".into()),
+                Keyword::Base("continue".into()),
+                Keyword::Base("case".into()),
+                Keyword::Base("default".into()),
+                Keyword::Base("do".into()),
+                Keyword::Base("goto".into()),
+                Keyword::Base("return".into()),
+                Keyword::Base("const".into()),
+                Keyword::Base("enum".into()),
+                Keyword::Base("struct".into()),
+                Keyword::Base("union".into()),
+                Keyword::Base("typedef".into()),
+                Keyword::Base("sizeof".into()),
+                Keyword::Base("volatile".into()),
+                Keyword::Base("register".into()),
+                Keyword::Base("static".into()),
+                Keyword::Base("extern".into()),
+                Keyword::Base("inline".into()),
+                Keyword::Base("asm".into()),
+                Keyword::Base("class".into()),
+                Keyword::Base("public".into()),
+                Keyword::Base("private".into()),
+                Keyword::Base("protected".into()),
+                Keyword::Base("new".into()),
+                Keyword::Base("delete".into()),
+                Keyword::Base("operator".into()),
+                Keyword::Base("template".into()),
+                Keyword::Base("this".into()),
+                Keyword::Base("friend".into()),
+                Keyword::Base("virtual".into()),
+                Keyword::Base("try".into()),
+                Keyword::Base("throw".into()),
+                Keyword::Base("catch".into()),
+                Keyword::Type("void".into()),
+                Keyword::Type("auto".into()),
+                Keyword::Type("char".into()),
+                Keyword::Type("int".into()),
+                Keyword::Type("short".into()),
+                Keyword::Type("long".into()),
+                Keyword::Type("signed".into()),
+                Keyword::Type("unsigned".into()),
+                Keyword::Type("float".into()),
+                Keyword::Type("double".into()),
+            ],
         ),
         Syntax::new(
             FileType::Rust,
             vec!["rs"],
             NUMBERS | STRINGS,
-            Comment::new(Some("//"), Some(("/*", "*/")))
+            Comment::new(Some("//"), Some(("/*", "*/"))),
+            Vec::new(),
         ),
     ];
 }

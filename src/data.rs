@@ -125,7 +125,7 @@ impl EditRow {
         // could be any one of [", ', \0]
         let mut in_string: char = '\0';
 
-        while i < render_chars.len() {
+        'outer: while i < render_chars.len() {
             let c = render_chars[i];
             let prev_hl = if i > 0 {
                 self.highlight[i - 1]
@@ -177,12 +177,38 @@ impl EditRow {
                         }
                         i += 1;
                         continue;
-                    } else {
-                        if c == '"' || c == '\'' {
-                            in_string = c;
-                            self.highlight[i] = Highlight::Str;
-                            i += 1;
-                            continue;
+                    } else if c == '"' || c == '\'' {
+                        in_string = c;
+                        self.highlight[i] = Highlight::Str;
+                        i += 1;
+                        continue;
+                    }
+                }
+
+                if prev_sep {
+                    for keyword in &syntax.keywords {
+                        let (kw_name, kw_hl) = match keyword {
+                            Keyword::Base(kw) => (kw, Highlight::KeywordBase),
+                            Keyword::Type(kw) => (kw, Highlight::KeywordType),
+                        };
+                        let kw_len = kw_name.len();
+
+                        if i + kw_len <= self.render.len() {
+                            let is_last_sep =
+                                if let Some(prev) = self.render.chars().nth(i + kw_len) {
+                                    Self::is_separator(prev)
+                                } else {
+                                    true
+                                };
+
+                            if &self.render[i..i + kw_name.len()] == kw_name && is_last_sep {
+                                for _ in 0..kw_name.len() {
+                                    self.highlight[i] = kw_hl;
+                                    i += 1;
+                                }
+                                prev_sep = false;
+                                continue 'outer;
+                            }
                         }
                     }
                 }
