@@ -8,6 +8,7 @@ mod highlight;
 mod input;
 mod screen;
 mod search;
+mod state;
 mod syntax;
 
 fn main() -> crossterm::Result<()> {

@@ -13,6 +13,7 @@ use crate::dimensions::*;
 use crate::events::*;
 use crate::input::*;
 use crate::search::*;
+use crate::state::*;
 use crate::syntax::*;
 
 pub struct Screen {
@@ -29,7 +30,7 @@ pub struct Screen {
     status_msg: String,
     status_time: time::Instant,
     search_info: SearchInfo,
-    syntax: Option<&'static Syntax>,
+    state: RenderState,
 }
 
 type PromptCallback = fn(&mut Screen, &str, EditorEvent) -> bool;
@@ -44,13 +45,14 @@ impl Screen {
         syntax: Option<&'static Syntax>,
     ) -> crossterm::Result<Self> {
         let (width, height) = crossterm::terminal::size()?;
+        let state = RenderState::new(syntax);
         Ok(Self {
             input: Input::new(),
             stdout: io::stdout(),
             // One row on the bottom for status bar
             window: Window::new(width, height - 2),
             cursor: Position::new(0, 0),
-            editrows: Self::make_editrows(lines, syntax),
+            editrows: Self::make_editrows(lines, &state),
             rowoff: 0,
             coloff: 0,
             file,
@@ -59,23 +61,23 @@ impl Screen {
             status_msg: String::from("Ctrl-Q: quit, Ctrl-S: save, Ctrl-F: find"),
             status_time: time::Instant::now(),
             search_info: SearchInfo::new(),
-            syntax,
+            state,
         })
     }
 
-    pub fn make_editrows(lines: &[String], syntax: Option<&'static Syntax>) -> Vec<EditRow> {
+    pub fn make_editrows(lines: &[String], state: &RenderState) -> Vec<EditRow> {
         let editrows = lines
             .iter()
-            .map(|line| EditRow::new(line.to_string(), syntax))
+            .map(|line| EditRow::new(line.to_string(), state))
             .collect::<Vec<EditRow>>();
 
         editrows
     }
 
     pub fn set_syntax(&mut self, syntax: Option<&'static Syntax>) {
-        self.syntax = syntax;
+        self.state.syntax = syntax;
         for row in self.editrows.iter_mut() {
-            row.update_row(syntax);
+            row.update_row(&self.state);
         }
     }
 
@@ -113,16 +115,17 @@ impl Screen {
      *
      * Handle ascii control characters by converting non printable characters
      * into printable ones. Render the alphabetic control characters
-     * (Ctrl-A = 1, Ctrl-B = 2, …, Ctrl-Z = 26) as the uppercase letters
+     * (Ctrl-A = 1, Ctrl-B = 2, ... Ctrl-Z = 26) as the uppercase letters
      * A through Z. Also render the 0 byte like a control character.
+     *
      * Ctrl-@ = 0, so render it as an @ sign. Finally, any other nonprintable
      * characters is rendered as a question mark (?). And to differentiate
      * these characters from their printable counterparts, render them using
      * inverted colors (black on white). use is_control() to check if the
      * current character is a control character. If so,  translate it into
-     * a pintable one by adding its value to '@' (in ASCII, the uppercase
+     * a printable one by adding its value to '@' (in ASCII, the uppercase
      * letters of the alphabet come after the @ character), or using the '?'
-     * character if it’s not in the alphabetic range.
+     * character if it's not in the alphabetic range.
      */
 
     pub fn draw_rows(&mut self) -> crossterm::Result<()> {
@@ -205,7 +208,7 @@ impl Screen {
         };
         status_left.truncate(width);
 
-        let file_type = if let Some(ft) = self.syntax {
+        let file_type = if let Some(ft) = self.state.syntax {
             ft.filetype.to_string()
         } else {
             "[no ft]".to_string()
@@ -506,7 +509,7 @@ impl Screen {
         }
         let cy = self.cursor.y as usize;
         let cx = self.cursor.x as usize;
-        self.editrows[cy].insert_char(cx, ch, self.syntax);
+        self.editrows[cy].insert_char(cx, ch, &self.state);
         self.cursor.x += 1;
         self.set_dirty(true);
     }
@@ -521,11 +524,11 @@ impl Screen {
         }
         let s = self.editrows[cy].chars.clone();
         if cx > 0 {
-            self.editrows[cy].delete_char(cx - 1, self.syntax);
+            self.editrows[cy].delete_char(cx - 1, &self.state);
             self.cursor.x = (cx - 1) as u16;
         } else {
             self.cursor.x = self.editrows[cy - 1].chars.len() as u16;
-            self.editrows[cy - 1].append_str(&s, self.syntax);
+            self.editrows[cy - 1].append_str(&s, &self.state);
             self.delete_row(cy);
             self.cursor.y -= 1;
         }
@@ -537,7 +540,7 @@ impl Screen {
             return;
         }
         self.editrows
-            .insert(at, EditRow::new(s.to_string(), self.syntax));
+            .insert(at, EditRow::new(s.to_string(), &self.state));
     }
 
     pub fn insert_newline(&mut self) {
@@ -548,7 +551,7 @@ impl Screen {
         if cx == 0 {
             self.insert_row(cy, "")
         } else {
-            let new_row = self.editrows[cy].split(cx, self.syntax);
+            let new_row = self.editrows[cy].split(cx, &self.state);
             self.editrows.insert(cy + 1, new_row);
         }
         self.cursor.y += 1;

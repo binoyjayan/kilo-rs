@@ -21,14 +21,14 @@ impl fmt::Display for FileType {
 
 pub struct Comment {
     pub single: Option<String>,
-    pub _multiline: Option<(String, String)>,
+    pub multiline: Option<(String, String)>,
 }
 
 impl Comment {
     pub fn new(single: Option<&str>, multiline: Option<(&str, &str)>) -> Self {
         Self {
             single: single.map(|s| s.to_string()),
-            _multiline: multiline.map(|(s, e)| (s.to_string(), e.to_string())),
+            multiline: multiline.map(|(s, e)| (s.to_string(), e.to_string())),
         }
     }
 }

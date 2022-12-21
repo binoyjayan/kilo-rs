@@ -158,6 +158,40 @@ impl EditRow {
                 }
 
                 // Multiline comments
+                if let Some((mcs, mce)) = &syntax.comment.multiline {
+                    if in_string == '\0' {
+                        if in_comment {
+                            self.highlight[i] = Highlight::MlComment;
+                            let s = self.get_render_range(i, mce.len());
+                            if s == mce {
+                                let mut j = 0;
+                                while i < self.render.len() && j < i + mce.len() {
+                                    self.highlight[i] = Highlight::MlComment;
+                                    i += 1;
+                                    j += 1;
+                                }
+                                in_comment = false;
+                                prev_sep = true;
+                                continue;
+                            } else {
+                                i += 1;
+                                continue;
+                            }
+                        } else {
+                            let s = self.get_render_range(i, mcs.len());
+                            if s == mcs {
+                                let mut j = 0;
+                                while i < self.render.len() && j < i + mcs.len() {
+                                    self.highlight[i] = Highlight::MlComment;
+                                    i += 1;
+                                    j += 1;
+                                }
+                                in_comment = true;
+                                continue;
+                            }
+                        }
+                    }
+                }
 
                 // Highlight numbers
                 if syntax.flags & NUMBERS != 0 {
