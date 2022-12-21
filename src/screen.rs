@@ -110,7 +110,21 @@ impl Screen {
      * subtracting coloff from the length, len can be a negative number,
      * meaning the user scrolled horizontally past the end of the line.
      * In that case, len would be 0 and nothing is displayed on that line.
+     *
+     * Handle ascii control characters by converting non printable characters
+     * into printable ones. Render the alphabetic control characters
+     * (Ctrl-A = 1, Ctrl-B = 2, …, Ctrl-Z = 26) as the uppercase letters
+     * A through Z. Also render the 0 byte like a control character.
+     * Ctrl-@ = 0, so render it as an @ sign. Finally, any other nonprintable
+     * characters is rendered as a question mark (?). And to differentiate
+     * these characters from their printable counterparts, render them using
+     * inverted colors (black on white). use is_control() to check if the
+     * current character is a control character. If so,  translate it into
+     * a pintable one by adding its value to '@' (in ASCII, the uppercase
+     * letters of the alphabet come after the @ character), or using the '?'
+     * character if it’s not in the alphabetic range.
      */
+
     pub fn draw_rows(&mut self) -> crossterm::Result<()> {
         for y in 0..self.window.height {
             let filerow = y as usize + self.rowoff;
@@ -142,7 +156,23 @@ impl Screen {
 
                 self.stdout.queue(cursor::MoveTo(0_u16, y))?;
                 for (c, hl) in curr_row.chars().zip(curr_highlight) {
-                    if hl.is_normal() {
+                    // Handle ascii control characters. See notes above.
+                    if c.is_control() {
+                        let ctrl = if (c as u8) < 26 {
+                            (b'@' + c as u8) as char
+                        } else {
+                            '?'
+                        };
+                        // Print the control character in the reverse style (fg/bg colors swapped)
+                        self.stdout
+                            .queue(style::SetAttribute(style::Attribute::Reverse))?
+                            .queue(style::Print(ctrl))?
+                            .queue(style::SetAttribute(style::Attribute::Reset))?;
+                        if curr_color != style::Color::Reset {
+                            // An attribute reset resets all formatting, so restore the current color
+                            self.stdout.queue(style::SetForegroundColor(curr_color))?;
+                        }
+                    } else if hl.is_normal() {
                         if curr_color != style::Color::Reset {
                             self.stdout
                                 .queue(style::SetForegroundColor(style::Color::Reset))?;
