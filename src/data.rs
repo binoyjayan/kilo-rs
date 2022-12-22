@@ -130,8 +130,8 @@ impl EditRow {
         self.highlight = vec![Highlight::Normal; self.render.len()];
         let render_chars: Vec<char> = self.render.chars().collect();
         let mut i = 0;
-        let mut in_comment = false;
         let mut prev_sep = true;
+        let mut in_ml_comment = false;
         // could be any one of [", ', \0]
         let mut in_string: char = '\0';
 
@@ -145,19 +145,46 @@ impl EditRow {
 
             #[allow(clippy::collapsible_if)]
             if let Some(syntax) = state.syntax {
-                // Highlight single line comments
+                /* Highlight single line comments.
+                 * Ignore single line comments within a multiline comment
+                 */
                 if let Some(scs) = &syntax.comment.single {
                     let s = self.get_render_range(i, scs.len());
-                    if in_string == '\0' && s == scs {
+                    if in_string == '\0' && s == scs && !in_ml_comment {
                         // Highlight the rest of the line
-                        while i < self.render.len() {
-                            self.highlight[i] = Highlight::Comment;
-                            i += 1;
-                        }
+                        self.highlight[i..self.render.len()].fill(Highlight::Comment);
+                        break;
                     }
                 }
 
                 // Multiline comments
+                if let Some((mcs, mce)) = &syntax.comment.multiline {
+                    if in_string == '\0' {
+                        if in_ml_comment {
+                            // Safely highlight the current character
+                            self.highlight[i] = Highlight::MlComment;
+                            let s = self.get_render_range(i, mce.len());
+                            if s == mce {
+                                self.highlight[i..i + mce.len()].fill(Highlight::MlComment);
+                                i += mce.len();
+                                in_ml_comment = false;
+                                prev_sep = true;
+                                continue;
+                            } else {
+                                i += 1;
+                                continue;
+                            }
+                        } else {
+                            let s = self.get_render_range(i, mcs.len());
+                            if s == mcs {
+                                self.highlight[i..i + mcs.len()].fill(Highlight::MlComment);
+                                i += mcs.len();
+                                in_ml_comment = true;
+                                continue;
+                            }
+                        }
+                    }
+                }
 
                 // Highlight numbers
                 if syntax.flags & NUMBERS != 0 {
@@ -211,10 +238,8 @@ impl EditRow {
                                 };
 
                             if &self.render[i..i + kw_name.len()] == kw_name && is_last_sep {
-                                for _ in 0..kw_name.len() {
-                                    self.highlight[i] = kw_hl;
-                                    i += 1;
-                                }
+                                self.highlight[i..i + kw_name.len()].fill(kw_hl);
+                                i += kw_name.len();
                                 prev_sep = false;
                                 continue 'outer;
                             }
