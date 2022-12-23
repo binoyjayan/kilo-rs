@@ -1,7 +1,20 @@
-
 // Example to illustrate kilo-rs capabilities
+#include <stdio.h>
+
+int integer;
 
 /* Multiline comment in a single line */
+
+float f;
+
+/*
+ * Multiline comment spanning multiple lines
+ *
+ */
+
+struct test {
+    int m;
+};
 
 /*
  * // single line comments inside multiline comments
@@ -9,11 +22,15 @@
  *
  */
 
-/* multiline comment with no separator */ int n = 20;
-/* multiline comment with a separator  */int n = 20;
-/* multiline comment enclosing a // comment */int n = 20;
+typedef struct mystruct {
+    int n;
+} mytype_s;
 
-/* I'm a comment */ int m = 10; // I'm not
+/* multiline comment with no separator */ int m = 20;
+/* multiline comment with a separator  */int n = 20;
+int p = 10; /* multiline comment enclosing a // comment */int q = 20;
+
+/* I'm a comment */ int r = 10; // I'm too
 
 // This comment has a control character  (Ctrl - F)
 // Few more control characters:  

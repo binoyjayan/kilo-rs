@@ -30,7 +30,7 @@ pub struct Screen {
     status_msg: String,
     status_time: time::Instant,
     search_info: SearchInfo,
-    state: RenderState,
+    syntax: Option<&'static Syntax>,
 }
 
 type PromptCallback = fn(&mut Screen, &str, EditorEvent) -> bool;
@@ -45,14 +45,13 @@ impl Screen {
         syntax: Option<&'static Syntax>,
     ) -> crossterm::Result<Self> {
         let (width, height) = crossterm::terminal::size()?;
-        let state = RenderState::new(syntax);
-        Ok(Self {
+        let mut screen = Self {
             input: Input::new(),
             stdout: io::stdout(),
             // One row on the bottom for status bar
             window: Window::new(width, height - 2),
             cursor: Position::new(0, 0),
-            editrows: Self::make_editrows(lines, &state),
+            editrows: Self::make_editrows(lines),
             rowoff: 0,
             coloff: 0,
             file,
@@ -61,24 +60,24 @@ impl Screen {
             status_msg: String::from("Ctrl-Q: quit, Ctrl-S: save, Ctrl-F: find"),
             status_time: time::Instant::now(),
             search_info: SearchInfo::new(),
-            state,
-        })
+            syntax,
+        };
+        screen.update_syntax_all();
+        Ok(screen)
     }
 
-    pub fn make_editrows(lines: &[String], state: &RenderState) -> Vec<EditRow> {
+    pub fn make_editrows(lines: &[String]) -> Vec<EditRow> {
         let editrows = lines
             .iter()
-            .map(|line| EditRow::new(line.to_string(), state))
+            .map(|line| EditRow::new(line.to_string(), false))
             .collect::<Vec<EditRow>>();
 
         editrows
     }
 
     pub fn set_syntax(&mut self, syntax: Option<&'static Syntax>) {
-        self.state.syntax = syntax;
-        for row in self.editrows.iter_mut() {
-            row.update_row(&self.state);
-        }
+        self.syntax = syntax;
+        self.update_syntax_all();
     }
 
     pub fn open(&mut self) -> crossterm::Result<()> {
@@ -208,7 +207,7 @@ impl Screen {
         };
         status_left.truncate(width);
 
-        let file_type = if let Some(ft) = self.state.syntax {
+        let file_type = if let Some(ft) = self.syntax {
             ft.filetype.to_string()
         } else {
             "[no ft]".to_string()
@@ -468,6 +467,7 @@ impl Screen {
             self.editrows[self.cursor.y as usize].chars.len() as u16
         };
         self.cursor.x = self.cursor.x.min(rowlen);
+        self.update_syntax_ml(self.cursor.y as usize);
     }
 
     /*
@@ -505,13 +505,15 @@ impl Screen {
 
     pub fn insert_char(&mut self, ch: char) {
         if (self.cursor.y as usize) == self.editrows.len() {
-            self.insert_row(self.editrows.len(), "");
+            self.insert_row(self.editrows.len(), "", false);
         }
         let cy = self.cursor.y as usize;
         let cx = self.cursor.x as usize;
-        self.editrows[cy].insert_char(cx, ch, &self.state);
+
+        self.editrows[cy].insert_char(cx, ch);
         self.cursor.x += 1;
         self.set_dirty(true);
+        self.update_syntax_ml(cy);
     }
 
     // Delete character left of the cursor
@@ -524,23 +526,23 @@ impl Screen {
         }
         let s = self.editrows[cy].chars.clone();
         if cx > 0 {
-            self.editrows[cy].delete_char(cx - 1, &self.state);
+            self.editrows[cy].delete_char(cx - 1);
             self.cursor.x = (cx - 1) as u16;
         } else {
             self.cursor.x = self.editrows[cy - 1].chars.len() as u16;
-            self.editrows[cy - 1].append_str(&s, &self.state);
+            self.editrows[cy - 1].append_str(&s);
             self.delete_row(cy);
             self.cursor.y -= 1;
         }
         self.set_dirty(true);
     }
 
-    pub fn insert_row(&mut self, at: usize, s: &str) {
+    pub fn insert_row(&mut self, at: usize, s: &str, open_comment: bool) {
         if at > self.editrows.len() {
             return;
         }
         self.editrows
-            .insert(at, EditRow::new(s.to_string(), &self.state));
+            .insert(at, EditRow::new(s.to_string(), open_comment));
     }
 
     pub fn insert_newline(&mut self) {
@@ -548,15 +550,24 @@ impl Screen {
         let cx = self.cursor.x as usize;
         // if cursor is at the beginning, just insert a new row at the current row index,
         // else split the current row. Either way increment 'y' and set 'x' to 0.
-        if cx == 0 {
-            self.insert_row(cy, "")
+        let open_comment = if cy == 0 || self.editrows.is_empty() {
+            false
+        } else if cy == self.editrows.len() {
+            self.editrows[cy - 1].open_ml_comment
         } else {
-            let new_row = self.editrows[cy].split(cx, &self.state);
+            self.editrows[cy].open_ml_comment
+        };
+        if cx == 0 {
+            self.insert_row(cy, "", open_comment)
+        } else {
+            let new_row = self.editrows[cy].split(cx);
             self.editrows.insert(cy + 1, new_row);
         }
+        self.set_dirty(true);
+        // Since an extra row is created, highlight that as well.
+        self.update_syntax_ml(cy);
         self.cursor.y += 1;
         self.cursor.x = 0;
-        self.set_dirty(true);
     }
 
     pub fn delete_row(&mut self, at: usize) {
@@ -565,6 +576,45 @@ impl Screen {
         }
         self.editrows.remove(at);
         self.set_dirty(true);
+    }
+
+    /*
+     * Highlight all the rows in the file based on syntax
+     */
+    fn update_syntax_all(&mut self) {
+        let mut state = RenderState::new();
+
+        for row in self.editrows.iter_mut() {
+            row.update_syntax(self.syntax, &mut state);
+            state.prev_in_ml_comment = row.open_ml_comment;
+        }
+    }
+
+    /*
+     * Highlight text for the remaining lines in a multiline comment
+     * Use the 'open_ml_comment' flag of the previous line to start
+     * with to know if the current line is part of a multiline comment.
+     */
+    fn update_syntax_ml(&mut self, cy: usize) {
+        if !self.is_dirty() || cy >= self.editrows.len() {
+            return;
+        }
+        let mut i = cy;
+        let mut state = RenderState::new();
+        state.prev_in_ml_comment = if i == 0 {
+            false
+        } else {
+            self.editrows[i - 1].open_ml_comment
+        };
+
+        while i < self.editrows.len() {
+            self.editrows[i].update_syntax(self.syntax, &mut state);
+            if !state.ml_comment_changed {
+                break;
+            }
+            state.prev_in_ml_comment = self.editrows[i].open_ml_comment;
+            i += 1;
+        }
     }
 
     pub fn find(&mut self) -> crossterm::Result<()> {
@@ -642,6 +692,7 @@ impl Screen {
                 }
             }
 
+            // If a match was found
             if let Some(rx) = self.editrows[current].render.find(query) {
                 self.search_info.last_match = Some(current);
                 self.cursor.y = current as u16;
@@ -651,6 +702,18 @@ impl Screen {
                 self.search_info.saved_highlight = Some(SavedHighlight::new(current, saved_hl));
                 self.editrows[current].highlight_match(rx, query.len());
                 return true;
+            } else {
+                // If no match was found, try the next row
+                if !matches!(
+                    event,
+                    EditorEvent::Cursor(CursorKey::Left) | EditorEvent::Cursor(CursorKey::Right)
+                ) {
+                    current = if current >= (self.editrows.len() - 1) {
+                        0
+                    } else {
+                        current + 1
+                    };
+                }
             }
         }
         false

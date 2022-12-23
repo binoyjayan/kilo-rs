@@ -1,15 +1,13 @@
-use crate::syntax::*;
-
 pub struct RenderState {
-    pub syntax: Option<&'static Syntax>,
-    pub ml_comment: bool,
+    pub prev_in_ml_comment: bool, // If the previous line has an open multiline comment
+    pub ml_comment_changed: bool, // If row.update_syntax() changed the 'open_ml_comment' state
 }
 
 impl RenderState {
-    pub fn new(syntax: Option<&'static Syntax>) -> Self {
+    pub fn new() -> Self {
         Self {
-            syntax,
-            ml_comment: false,
+            prev_in_ml_comment: false,
+            ml_comment_changed: false,
         }
     }
 }

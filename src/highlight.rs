@@ -4,7 +4,6 @@ use crossterm::style;
 pub enum Highlight {
     Normal,
     Comment,
-    MlComment,
     KeywordBase,
     KeywordType,
     Number,
@@ -23,7 +22,6 @@ impl From<Highlight> for style::Color {
         match highlight {
             Highlight::Normal => style::Color::White,
             Highlight::Comment => style::Color::Cyan,
-            Highlight::MlComment => style::Color::Cyan,
             Highlight::KeywordBase => style::Color::Yellow,
             Highlight::KeywordType => style::Color::Green,
             Highlight::Number => style::Color::Red,

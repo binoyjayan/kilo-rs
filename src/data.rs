@@ -7,6 +7,7 @@ pub struct EditRow {
     pub chars: String,             // characters in the file
     pub render: String,            // characters rendered on the screen
     pub highlight: Vec<Highlight>, // highlight for each character in 'render'
+    pub open_ml_comment: bool,     // If current row has an open multiline comment
 }
 
 const TABSTOP: u16 = 8;
@@ -31,23 +32,24 @@ impl EditRow {
         render
     }
 
-    pub fn update_row(&mut self, state: &RenderState) {
+    pub fn update_row(&mut self) {
         self.render = Self::render_chars(&self.chars);
-        self.update_syntax(state);
+        self.highlight = vec![Highlight::Normal; self.render.len()];
     }
 
-    pub fn new(chars: String, state: &RenderState) -> Self {
+    pub fn new(chars: String, open_comment: bool) -> Self {
         let mut newrow = Self {
             chars,
             render: String::new(),
             highlight: Vec::new(),
+            open_ml_comment: open_comment,
         };
-        newrow.update_row(state);
+        newrow.update_row();
         newrow
     }
 
     /* Loop through all the characters to the left of cx to figure out how
-     * many spaces each tab takes. For each character, if it’s a tab, use
+     * many spaces each tab takes. For each character, if it's a tab, use
      * rx % TAB_STOP to find out how many columns we are is to the right
      * of the last tab stop, and then subtract that from TAB_STOP - 1 to
      * find out how many columns we are to the left of the next tab stop.
@@ -73,7 +75,7 @@ impl EditRow {
      * as we go. But instead of stopping when we hit a particular cx value and
      * returning cur_rx, we want to stop when cur_rx hits the given rx value
      * and return cx. The return statement at the very end is just in case the
-     * caller provided an rx that’s out of range, which shouldn’t happen. The
+     * caller provided an rx that’s out of range, which shouldn't happen. The
      * return statement inside the for loop should handle all rx values that
      * are valid indexes into render.
      */
@@ -93,29 +95,29 @@ impl EditRow {
         cx
     }
 
-    pub fn insert_char(&mut self, idx: usize, ch: char, state: &RenderState) {
+    pub fn insert_char(&mut self, idx: usize, ch: char) {
         self.chars.insert(idx, ch);
-        self.update_row(state);
+        self.update_row();
     }
 
-    pub fn append_str(&mut self, s: &str, state: &RenderState) {
+    pub fn append_str(&mut self, s: &str) {
         self.chars.push_str(s);
-        self.update_row(state);
+        self.update_row();
     }
 
-    pub fn delete_char(&mut self, idx: usize, state: &RenderState) {
+    pub fn delete_char(&mut self, idx: usize) {
         if idx >= self.chars.len() {
             return;
         }
         self.chars.remove(idx).to_string();
-        self.update_row(state);
+        self.update_row();
     }
 
     // Splits the current EditRow object based on index to 'chars' and returns a new one
-    pub fn split(&mut self, at: usize, state: &RenderState) -> Self {
+    pub fn split(&mut self, at: usize) -> Self {
         let right = self.chars.split_off(at);
-        self.update_row(state);
-        Self::new(right, state)
+        self.update_row();
+        Self::new(right, self.open_ml_comment)
     }
 
     fn get_render_range(&self, offset: usize, len: usize) -> &str {
@@ -126,14 +128,16 @@ impl EditRow {
         }
     }
 
-    fn update_syntax(&mut self, state: &RenderState) {
-        self.highlight = vec![Highlight::Normal; self.render.len()];
+    pub fn update_syntax(&mut self, syntax: Option<&'static Syntax>, state: &mut RenderState) {
         let render_chars: Vec<char> = self.render.chars().collect();
+        self.highlight.fill(Highlight::Normal);
         let mut i = 0;
         let mut prev_sep = true;
-        let mut in_ml_comment = false;
         // could be any one of [", ', \0]
         let mut in_string: char = '\0';
+        // Get the 'in_ml_comment' state of the previous row
+        let mut in_ml_comment = state.prev_in_ml_comment;
+        state.ml_comment_changed = false;
 
         'outer: while i < render_chars.len() {
             let c = render_chars[i];
@@ -144,7 +148,7 @@ impl EditRow {
             };
 
             #[allow(clippy::collapsible_if)]
-            if let Some(syntax) = state.syntax {
+            if let Some(syntax) = syntax {
                 /* Highlight single line comments.
                  * Ignore single line comments within a multiline comment
                  */
@@ -162,10 +166,10 @@ impl EditRow {
                     if in_string == '\0' {
                         if in_ml_comment {
                             // Safely highlight the current character
-                            self.highlight[i] = Highlight::MlComment;
+                            self.highlight[i] = Highlight::Comment;
                             let s = self.get_render_range(i, mce.len());
                             if s == mce {
-                                self.highlight[i..i + mce.len()].fill(Highlight::MlComment);
+                                self.highlight[i..i + mce.len()].fill(Highlight::Comment);
                                 i += mce.len();
                                 in_ml_comment = false;
                                 prev_sep = true;
@@ -177,7 +181,7 @@ impl EditRow {
                         } else {
                             let s = self.get_render_range(i, mcs.len());
                             if s == mcs {
-                                self.highlight[i..i + mcs.len()].fill(Highlight::MlComment);
+                                self.highlight[i..i + mcs.len()].fill(Highlight::Comment);
                                 i += mcs.len();
                                 in_ml_comment = true;
                                 continue;
@@ -251,6 +255,13 @@ impl EditRow {
             prev_sep = Self::is_separator(c);
             i += 1;
         }
+
+        // If the row is in the middle of a multiline comment
+        if in_ml_comment {
+            self.highlight.fill(Highlight::Comment);
+        }
+        state.ml_comment_changed = self.open_ml_comment != in_ml_comment;
+        self.open_ml_comment = in_ml_comment;
     }
 
     pub fn is_separator(ch: char) -> bool {
