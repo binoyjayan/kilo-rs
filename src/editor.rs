@@ -112,6 +112,7 @@ impl Editor {
                     ControlEvent::Find => {
                         self.screen.find()?;
                     }
+                    ControlEvent::Line => self.screen.toggle_line()?,
                 },
             },
             Err(e) => {

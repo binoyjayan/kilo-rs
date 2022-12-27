@@ -31,6 +31,7 @@ impl Input {
                 'h' => Some(EditorEvent::Cursor(CursorKey::Backspace)),
                 's' => Some(EditorEvent::Control(ControlEvent::Save)),
                 'f' => Some(EditorEvent::Control(ControlEvent::Find)),
+                'l' => Some(EditorEvent::Control(ControlEvent::Line)),
                 _ => None,
             },
             // Cursor and character keys

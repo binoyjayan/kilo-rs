@@ -21,6 +21,7 @@ pub struct Screen {
     stdout: io::Stdout,
     window: Window,
     cursor: Position,
+    lno_width: usize,
     editrows: Vec<EditRow>,
     rowoff: usize,
     coloff: usize,
@@ -37,6 +38,8 @@ type PromptCallback = fn(&mut Screen, &str, EditorEvent) -> bool;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const QUIT_TIMES: u8 = 3;
+const LNO_WIDTH_EXTRA: usize = 1;
+const HELP_TEXT: &str = "Ctrl-Q: quit, Ctrl-S: save, Ctrl-F: find, Ctrl+L: lno";
 
 impl Screen {
     pub fn new(
@@ -51,13 +54,14 @@ impl Screen {
             // One row on the bottom for status bar
             window: Window::new(width, height - 2),
             cursor: Position::new(0, 0),
+            lno_width: 0,
             editrows: Self::make_editrows(lines),
             rowoff: 0,
             coloff: 0,
             file,
             dirty: false,
             quit_times: QUIT_TIMES,
-            status_msg: String::from("Ctrl-Q: quit, Ctrl-S: save, Ctrl-F: find"),
+            status_msg: String::from(HELP_TEXT),
             status_time: time::Instant::now(),
             search_info: SearchInfo::new(),
             syntax,
@@ -104,6 +108,15 @@ impl Screen {
         Ok(())
     }
 
+    pub fn toggle_line(&mut self) -> crossterm::Result<()> {
+        self.lno_width = if self.lno_width == 0 {
+            self.editrows.len().to_string().len() + LNO_WIDTH_EXTRA
+        } else {
+            0
+        };
+        self.refresh()
+    }
+
     /*
      * To display each row at the column offset, coloff as an index into the
      * chars of each editrow displayed, and subtract the number of characters
@@ -135,17 +148,25 @@ impl Screen {
                     self.show_welcome(y)?;
                 } else {
                     self.stdout
-                        .queue(cursor::MoveTo(0, y))?
+                        .queue(cursor::MoveTo(0_u16, y))?
                         .queue(style::Print("~".to_string()))?;
                 }
             } else {
+                // Display line numbers
+                if self.lno_width > 0 {
+                    let lno_str = format!("{0:>1$}", filerow + 1, self.lno_width - LNO_WIDTH_EXTRA);
+                    self.stdout
+                        .queue(cursor::MoveTo(0, y))?
+                        .queue(style::Print(lno_str))?;
+                }
+
                 let colstart = self.coloff;
                 // Handling horizontal scrolling
                 let len = self.editrows[filerow]
                     .render
                     .len()
                     .saturating_sub(colstart)
-                    .min(self.window.width as usize);
+                    .min((self.window.width as usize) - (self.lno_width as usize));
 
                 // Nothing to display on this line
                 if len == 0 {
@@ -156,7 +177,8 @@ impl Screen {
                 let curr_highlight = self.editrows[filerow].highlight[colstart..colend].to_vec();
                 let mut curr_color = style::Color::Reset;
 
-                self.stdout.queue(cursor::MoveTo(0_u16, y))?;
+                self.stdout
+                    .queue(cursor::MoveTo(self.lno_width as u16, y))?;
                 for (c, hl) in curr_row.chars().zip(curr_highlight) {
                     // Handle ascii control characters. See notes above.
                     if c.is_control() {
@@ -279,15 +301,15 @@ impl Screen {
         let mut welcome = format!("Kilo-rs version {VERSION}");
         welcome.truncate(self.window.width as usize);
         if welcome.len() < self.window.width as usize {
-            let left = ((self.window.width as usize - welcome.len()) / 2) as u16;
+            let left = ((self.window.width as usize - welcome.len() - self.lno_width) / 2) as u16;
             self.stdout
-                .queue(cursor::MoveTo(0, row))?
+                .queue(cursor::MoveTo(0_u16, row))?
                 .queue(style::Print("~".to_string()))?
-                .queue(cursor::MoveTo(left, row))?
+                .queue(cursor::MoveTo(left + self.lno_width as u16, row))?
                 .queue(style::Print(welcome))?;
         } else {
             self.stdout
-                .queue(cursor::MoveTo(0, row))?
+                .queue(cursor::MoveTo(self.lno_width as u16, row))?
                 .queue(style::Print(welcome))?;
         }
         Ok(())
@@ -387,7 +409,7 @@ impl Screen {
      */
     pub fn move_to(&mut self, pos: Position) -> crossterm::Result<()> {
         self.stdout.queue(cursor::MoveTo(
-            pos.rx - self.coloff as u16,
+            pos.rx - self.coloff as u16 + self.lno_width as u16,
             pos.y - self.rowoff as u16,
         ))?;
         Ok(())
@@ -476,6 +498,9 @@ impl Screen {
      * Call this function right before the screen is refreshed.
      */
     pub fn scroll(&mut self) {
+        let win_height = self.window.height as usize;
+        let win_width = self.window.width as usize - self.lno_width;
+
         self.cursor.rx = if (self.cursor.y as usize) < self.editrows.len() {
             self.editrows[self.cursor.y as usize].cx_to_rx(self.cursor.x)
         } else {
@@ -491,15 +516,15 @@ impl Screen {
          * to the what is at the 'top' of the screen. And 'window.height' needs to be
          * used to figure out the bottom of the screen.
          */
-        if (self.cursor.y as usize) >= self.rowoff + (self.window.height as usize) {
-            self.rowoff = self.cursor.y as usize - self.window.height as usize + 1;
+        if (self.cursor.y as usize) >= self.rowoff + (win_height) {
+            self.rowoff = self.cursor.y as usize - win_height + 1;
         }
 
         if (self.cursor.rx as usize) < self.coloff {
             self.coloff = self.cursor.rx as usize;
         }
-        if (self.cursor.rx as usize) >= (self.coloff + self.window.width as usize) {
-            self.coloff = self.cursor.rx as usize - self.window.width as usize
+        if (self.cursor.rx as usize) >= (self.coloff + win_width) {
+            self.coloff = self.cursor.rx as usize - win_width
         }
     }
 
