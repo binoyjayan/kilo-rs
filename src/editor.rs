@@ -1,4 +1,3 @@
-use std::ffi;
 use std::fmt::Display;
 use std::fs;
 use std::path;
@@ -18,28 +17,34 @@ impl Editor {
     }
 
     pub fn open(file: &str) -> crossterm::Result<Self> {
-        let data = Self::read_file(file);
-        let lines: Vec<String> = data.split('\n').map(|s: &str| s.to_string()).collect();
-        let syntax = Self::file_syntax(file)?;
+        let lines: Vec<String> = if path::Path::new(file).exists() {
+            let data = Self::read_file(file);
+            data.split('\n').map(|s: &str| s.to_string()).collect()
+        } else {
+            Vec::new()
+        };
+        let syntax = Self::file_syntax(file);
         Self::create(&lines, Some(file.to_string()), syntax)
     }
 
     /*
-     * Look up the syntax highlight database for the file extension and file
-     * a reference to the syntax object for the file type.
+     * Look up the syntax highlight database for the file extension and
+     * return a reference to the syntax object for the file type.
      */
-    fn file_syntax(filename: &str) -> crossterm::Result<Option<&'static Syntax>> {
-        let path = path::Path::new(&filename).canonicalize()?;
-        if let Some(extension) = path.extension().and_then(ffi::OsStr::to_str) {
-            for syntax in HLDB.iter() {
-                for ext in syntax.filematch.iter() {
-                    if ext == extension {
-                        return Ok(Some(syntax));
+    fn file_syntax(filename: &str) -> Option<&'static Syntax> {
+        match filename.split('.').collect::<Vec<&str>>().last() {
+            None => return None,
+            Some(ext_file) => {
+                for syntax in HLDB.iter() {
+                    for ext_db in syntax.filematch.iter() {
+                        if ext_db == ext_file {
+                            return Some(syntax);
+                        }
                     }
                 }
             }
         }
-        Ok(None)
+        None
     }
 
     fn read_file(file: &str) -> String {
@@ -131,7 +136,7 @@ impl Editor {
         };
         if let Some(filename) = filename {
             if self.save_as(&filename) {
-                self.screen.set_syntax(Self::file_syntax(&filename)?);
+                self.screen.set_syntax(Self::file_syntax(&filename));
                 self.file = Some(filename);
             }
         } else {
