@@ -24,14 +24,14 @@ impl fmt::Display for FileType {
 }
 
 pub struct Comment {
-    pub single: Option<String>,
+    pub single: Vec<String>,
     pub multiline: Option<(String, String)>,
 }
 
 impl Comment {
-    pub fn new(single: Option<&str>, multiline: Option<(&str, &str)>) -> Self {
+    pub fn new(single: Vec<&str>, multiline: Option<(&str, &str)>) -> Self {
         Self {
-            single: single.map(|s| s.to_string()),
+            single: single.iter().map(|&s| s.to_string()).collect(),
             multiline: multiline.map(|(s, e)| (s.to_string(), e.to_string())),
         }
     }
@@ -75,7 +75,7 @@ lazy_static! {
             FileType::C,
             vec!["c", "h", "cc", "cpp", "hpp"],
             NUMBERS | STRINGS,
-            Comment::new(Some("//"), Some(("/*", "*/"))),
+            Comment::new(vec!["//"], Some(("/*", "*/"))),
             vec![
                 Keyword::Base("switch".into()),
                 Keyword::Base("if".into()),
@@ -131,7 +131,7 @@ lazy_static! {
             FileType::Sh,
             vec!["sh"],
             NUMBERS | STRINGS,
-            Comment::new(Some("#"), None),
+            Comment::new(vec!["#"], None),
             vec![
                 Keyword::Base("if".into()),
                 Keyword::Base("then".into()),
@@ -276,7 +276,7 @@ lazy_static! {
             FileType::Rust,
             vec!["rs"],
             NUMBERS | STRINGS,
-            Comment::new(Some("//"), Some(("/*", "*/"))),
+            Comment::new(vec!["//"], Some(("/*", "*/"))),
             vec![
                 Keyword::Base("as".into()),
                 Keyword::Base("async".into()),
@@ -337,7 +337,7 @@ lazy_static! {
             vec!["py"],
             NUMBERS | STRINGS,
             // Although, """ is not a comment, it mimics one
-            Comment::new(Some("#"), Some(("\"\"\"", "\"\"\""))),
+            Comment::new(vec!["#"], Some(("\"\"\"", "\"\"\""))),
             vec![
                 Keyword::Base("False".into()),
                 Keyword::Base("None".into()),

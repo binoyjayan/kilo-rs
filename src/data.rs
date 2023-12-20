@@ -67,7 +67,7 @@ impl EditRow {
             }
             rx += 1;
         }
-        rx as u16
+        rx
     }
 
     /*
@@ -152,9 +152,9 @@ impl EditRow {
                 /* Highlight single line comments.
                  * Ignore single line comments within a multiline comment
                  */
-                if let Some(scs) = &syntax.comment.single {
-                    let s = self.get_render_range(i, scs.len());
-                    if in_string == '\0' && s == scs && !in_ml_comment {
+                for single in &syntax.comment.single {
+                    let s = self.get_render_range(i, single.len());
+                    if in_string == '\0' && s == single && !in_ml_comment {
                         // Highlight the rest of the line
                         self.highlight[i..self.render.len()].fill(Highlight::Comment);
                         break;
