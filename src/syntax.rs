@@ -10,6 +10,7 @@ pub enum FileType {
     Sh,
     Rust,
     Python,
+    P2sh,
 }
 
 impl fmt::Display for FileType {
@@ -19,6 +20,7 @@ impl fmt::Display for FileType {
             FileType::Sh => write!(f, "SHELL"),
             FileType::Rust => write!(f, "RUST"),
             FileType::Python => write!(f, "Python"),
+            FileType::P2sh => write!(f, "P2SH"),
         }
     }
 }
@@ -387,6 +389,33 @@ lazy_static! {
                 Keyword::Type("bool".into()),
                 Keyword::Type("set".into()),
                 Keyword::Type("frozenset".into()),
+            ],
+        ),
+        Syntax::new(
+            FileType::P2sh,
+            vec!["p2", "p2sh"],
+            NUMBERS | STRINGS,
+            Comment::new(vec!["#", "//"], None),
+            vec![
+                Keyword::Base("_".into()),
+                Keyword::Base("let".into()),
+                Keyword::Base("fn".into()),
+                Keyword::Base("true".into()),
+                Keyword::Base("false".into()),
+                Keyword::Base("if".into()),
+                Keyword::Base("else".into()),
+                Keyword::Base("return".into()),
+                Keyword::Base("null".into()),
+                Keyword::Base("map".into()),
+                Keyword::Base("loop".into()),
+                Keyword::Base("while".into()),
+                Keyword::Base("break".into()),
+                Keyword::Base("continue".into()),
+                Keyword::Base("match".into()),
+                Keyword::Base("struct".into()),
+                Keyword::Base("stdin".into()),
+                Keyword::Base("stdout".into()),
+                Keyword::Base("stderr".into()),
             ],
         ),
     ];
