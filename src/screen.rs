@@ -166,7 +166,7 @@ impl Screen {
                     .render
                     .len()
                     .saturating_sub(colstart)
-                    .min((self.window.width as usize) - (self.lno_width as usize));
+                    .min((self.window.width as usize) - (self.lno_width));
 
                 // Nothing to display on this line
                 if len == 0 {
@@ -721,7 +721,7 @@ impl Screen {
             if let Some(rx) = self.editrows[current].render.find(query) {
                 self.search_info.last_match = Some(current);
                 self.cursor.y = current as u16;
-                self.cursor.x = self.editrows[current].rx_to_cx(rx as u16) as u16;
+                self.cursor.x = self.editrows[current].rx_to_cx(rx as u16);
                 self.rowoff = self.editrows.len();
                 let saved_hl = self.editrows[current].highlight.clone();
                 self.search_info.saved_highlight = Some(SavedHighlight::new(current, saved_hl));
