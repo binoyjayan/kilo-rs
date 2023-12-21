@@ -1,0 +1,37 @@
+#!/usr/bin/env p2sh
+//
+// Example to illustrate kilo-rs capabilities
+//
+
+# bash style comment
+
+//  Arrays
+let a = [1, 2, 3];
+
+// maps
+let m = map {"a": 1, "b": 2};
+
+// let style functions
+let sum_f = fn(a, b) { a + b };
+
+puts(1, " ", "hello", " ", true, " ", fn(){}, " ", [1,2,3], " ", m);
+
+// print examples
+println("Base 10               : {}",   69420); // 69420
+println("Base 2 (binary)       : {:b}", 69420); // 10000111100101100
+println("Base 8 (octal)        : {:o}", 69420); // 207454
+
+// This comment has a control character  (Ctrl - F)
+// Few more control characters:  
+
+fn main() {
+    let a = 100;
+    let b = 100;
+
+    let str = "This string /* has no */ comments";
+    let sum = sum_f(a, b);
+    println("sum of {} and {} is {}", a, b, sum);
+}
+
+main();
+

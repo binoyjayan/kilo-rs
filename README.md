@@ -8,6 +8,7 @@ The editor is cross platform and has been tested on MacOs and Linux.
 
 ```
 cargo run --release tests/test01.c
+cargo run --release tests/test02.p2
 ```
 
 ## Feature set
