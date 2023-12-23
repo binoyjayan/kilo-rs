@@ -230,6 +230,8 @@ impl EditRow {
                         let (kw_name, kw_hl) = match keyword {
                             Keyword::Base(kw) => (kw, Highlight::KeywordBase),
                             Keyword::Type(kw) => (kw, Highlight::KeywordType),
+                            Keyword::BuiltinVar(kw) => (kw, Highlight::KeywordBuiltinVar),
+                            Keyword::BuiltinFn(kw) => (kw, Highlight::KeywordBuiltinFn),
                         };
                         let kw_len = kw_name.len();
 
