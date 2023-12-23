@@ -38,7 +38,7 @@ cargo run --release tests/test02.p2
 
 ### Syntax highlighting
  - File type based syntax support
- - Supported file types - c,c++,sh,rust,python
+ - Supported file types - c,c++,sh,rust,python,p2sh
 
 ## TODO
  - Config files to store custom config
